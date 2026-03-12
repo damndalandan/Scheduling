@@ -1,0 +1,307 @@
+<!-- TabTrips.html — All Trips Tab -->
+<style>
+  #tab-trips, #tab-trips * { color: var(--text); }
+</style>
+
+<div style="padding:24px 28px 40px;">
+
+  <!-- Header -->
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:22px;">
+    <div>
+      <h2 style="font-size:20px;font-weight:800;letter-spacing:-.02em;margin:0 0 3px;">All Trips</h2>
+      <p style="font-size:13px;color:var(--text3);margin:0;">Tanan nga trip requests</p>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button id="trp-reload-btn" class="o-btn-reload" onclick="trp_reload()">
+        <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+        </svg>
+        Reload
+      </button>
+      <button class="o-btn o-btn-primary" onclick="switchTab('new-trip')">+ New Trip</button>
+    </div>
+  </div>
+
+  <!-- Filter chips -->
+  <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;">
+    <button class="o-chip active" onclick="trp_setStatus('',this)">All</button>
+    <button class="o-chip" onclick="trp_setStatus('Draft',this)">Draft</button>
+    <button class="o-chip" onclick="trp_setStatus('Submitted',this)">Submitted</button>
+    <button class="o-chip" onclick="trp_setStatus('Approved',this)">Approved</button>
+    <button class="o-chip" onclick="trp_setStatus('Completed',this)">Completed</button>
+    <button class="o-chip" onclick="trp_setStatus('Rejected',this)">Rejected</button>
+    <button class="o-chip" onclick="trp_setStatus('Cancelled',this)">Cancelled</button>
+  </div>
+
+  <!-- Search -->
+  <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
+    <div class="o-search-wrap" style="flex:1;min-width:200px;">
+      <span class="o-search-icon">
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z"/>
+        </svg>
+      </span>
+      <input id="trp-search" class="o-input" placeholder="Search Trip ID, requestor, plate, purpose…" oninput="trp_apply()">
+    </div>
+    <span id="trp-count" style="font-size:12px;color:var(--text3);font-weight:600;white-space:nowrap;"></span>
+  </div>
+
+  <!-- Table (desktop) -->
+  <div id="trp-table-wrap" class="o-table-wrap">
+    <table class="o-table">
+      <thead>
+        <tr>
+          <th>Trip ID</th><th>Date</th><th>Requestor</th>
+          <th>Route</th><th>Type</th><th>Vehicle</th>
+          <th>Driver</th><th>Status</th><th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="trp-tbody"></tbody>
+    </table>
+  </div>
+
+  <!-- Cards (mobile) -->
+  <div id="trp-cards" style="display:none;" id="trp-cards"></div>
+
+  <div id="trp-pagination" style="display:flex;align-items:center;gap:6px;margin-top:14px;flex-wrap:wrap;"></div>
+
+</div>
+
+<!-- Trip Detail Modal -->
+<div class="o-modal-overlay" id="trp-detail-modal">
+  <div class="o-modal o-modal-lg">
+    <div class="o-modal-header">
+      <div class="o-modal-title" id="trp-detail-title">Trip Details</div>
+      <button class="o-modal-close" onclick="trp_closeDetail()">✕</button>
+    </div>
+    <div class="o-modal-body" id="trp-detail-body"></div>
+    <div class="o-modal-footer">
+      <button class="o-btn o-btn-ghost" onclick="trp_closeDetail()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Cancel Trip Modal -->
+<div class="o-modal-overlay" id="trp-cancel-modal">
+  <div class="o-modal o-modal-sm">
+    <div class="o-modal-header">
+      <div class="o-modal-title">Cancel Trip</div>
+      <button class="o-modal-close" onclick="document.getElementById('trp-cancel-modal').classList.remove('open')">✕</button>
+    </div>
+    <div class="o-modal-body">
+      <div class="o-alert o-alert-warn" style="margin-bottom:14px;">
+        ⚠️ Siguruha nga husto na imong desisyon.
+      </div>
+      <div class="o-form-group">
+        <label class="o-label">Cancel Reason *</label>
+        <textarea id="trp-cancel-reason" class="o-input" placeholder="Required. Ngano gi-cancel?"></textarea>
+      </div>
+    </div>
+    <div class="o-modal-footer">
+      <button class="o-btn o-btn-ghost" onclick="document.getElementById('trp-cancel-modal').classList.remove('open')">Back</button>
+      <button id="trp-cancel-submit" class="o-btn o-btn-danger" onclick="trp_submitCancel()">Confirm Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var trp_all = [], trp_filtered = [], trp_statusFilter = '', trp_cancelId = null;
+var trp_page = 1, trp_pageSize = 15;
+
+function init_trips() {
+  trp_showSkeleton();
+  google.script.run
+    .withSuccessHandler(function(r) {
+      o_setReloading('trp-reload-btn', false);
+      if (!r.success) { o_toast('error', r.message); return; }
+      trp_all = r.trips || [];
+      trp_page = 1;
+      trp_apply();
+    })
+    .withFailureHandler(function(e) {
+      o_setReloading('trp-reload-btn', false);
+      o_toast('error', e.message);
+    })
+    .getTripsInitData();
+}
+
+function trp_reload() {
+  o_setReloading('trp-reload-btn', true);
+  initializedTabs['trips'] = false;
+  init_trips();
+}
+
+function trp_showSkeleton() {
+  document.getElementById('trp-tbody').innerHTML = o_skelRows(9, 6);
+}
+
+function trp_setStatus(s, el) {
+  trp_statusFilter = s;
+  document.querySelectorAll('#tab-trips .o-chip').forEach(function(c) { c.classList.remove('active'); });
+  el.classList.add('active');
+  trp_page = 1;
+  trp_apply();
+}
+
+function trp_apply() {
+  var q = (document.getElementById('trp-search').value || '').toLowerCase();
+  trp_filtered = trp_all.filter(function(t) {
+    var match = (!trp_statusFilter || t.status === trp_statusFilter);
+    if (q) {
+      var hay = (t.tripId + t.reqName + t.plate + t.purpose + t.fromLoc + t.toLoc + t.driverName).toLowerCase();
+      match = match && hay.includes(q);
+    }
+    return match;
+  });
+  document.getElementById('trp-count').textContent = trp_filtered.length + ' trip' + (trp_filtered.length !== 1 ? 's' : '');
+  trp_renderPage();
+  o_renderPagination('trp-pagination', trp_page, Math.ceil(trp_filtered.length / trp_pageSize), 'trp_goPage');
+}
+
+function trp_goPage(p) {
+  var total = Math.ceil(trp_filtered.length / trp_pageSize);
+  if (p < 1 || p > total) return;
+  trp_page = p;
+  trp_renderPage();
+  o_renderPagination('trp-pagination', trp_page, total, 'trp_goPage');
+}
+
+function trp_renderPage() {
+  var start = (trp_page - 1) * trp_pageSize;
+  var slice = trp_filtered.slice(start, start + trp_pageSize);
+  var tb = document.getElementById('trp-tbody');
+
+  if (!slice.length) {
+    tb.innerHTML = '<tr><td colspan="9"><div class="o-empty"><div class="o-empty-icon">🗺️</div><p>Walay nakit-an nga trips.</p></div></td></tr>';
+    trp_renderCards([]);
+    return;
+  }
+
+  tb.innerHTML = slice.map(function(t) {
+    var actions = '<div class="td-actions">'
+      + '<button class="o-btn o-btn-ghost o-btn-sm" onclick="trp_openDetail(\'' + o_esc(t.tripId) + '\')">View</button>';
+    if (t.status === 'Draft' || t.status === 'Submitted' || t.status === 'Approved') {
+      actions += '<button class="o-btn o-btn-danger o-btn-sm" onclick="trp_openCancel(\'' + o_esc(t.tripId) + '\')">Cancel</button>';
+    }
+    actions += '</div>';
+    return '<tr>'
+      + '<td class="td-id">' + o_esc(t.tripId) + '</td>'
+      + '<td style="font-size:12px;color:var(--text3);">' + o_esc(t.requestDate || '—') + '</td>'
+      + '<td style="font-weight:600;">' + o_esc(t.reqName || '—') + '</td>'
+      + '<td style="font-size:12px;">' + o_esc(t.fromLoc) + ' → ' + o_esc(t.toLoc) + '</td>'
+      + '<td style="font-size:12px;color:var(--text2);">' + o_esc(t.tripType) + '</td>'
+      + '<td style="font-weight:600;">' + o_esc(t.plate || '—') + '</td>'
+      + '<td>' + o_esc(t.driverName || '—') + '</td>'
+      + '<td>' + o_statusBadge(t.status) + '</td>'
+      + '<td>' + actions + '</td>'
+      + '</tr>';
+  }).join('');
+
+  trp_renderCards(slice);
+}
+
+function trp_renderCards(slice) {
+  var el = document.getElementById('trp-cards');
+  if (!el) return;
+  el.innerHTML = slice.map(function(t) {
+    return '<div class="o-card" style="padding:14px;margin-bottom:10px;">'
+      + '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">'
+      + '<span class="mono" style="font-size:12px;color:var(--text3);">' + o_esc(t.tripId) + '</span>'
+      + o_statusBadge(t.status)
+      + '</div>'
+      + '<div style="font-weight:700;margin-bottom:3px;">' + o_esc(t.reqName) + '</div>'
+      + '<div style="font-size:12px;color:var(--text3);margin-bottom:8px;">' + o_esc(t.fromLoc) + ' → ' + o_esc(t.toLoc) + '</div>'
+      + '<div style="display:flex;gap:8px;">'
+      + '<button class="o-btn o-btn-ghost o-btn-sm" onclick="trp_openDetail(\'' + o_esc(t.tripId) + '\')">View</button>'
+      + ((t.status === 'Draft' || t.status === 'Submitted' || t.status === 'Approved')
+          ? '<button class="o-btn o-btn-danger o-btn-sm" onclick="trp_openCancel(\'' + o_esc(t.tripId) + '\')">Cancel</button>' : '')
+      + '</div>'
+      + '</div>';
+  }).join('');
+}
+
+function trp_openDetail(id) {
+  var t = trp_all.find(function(x) { return x.tripId === id; });
+  if (!t) return;
+  document.getElementById('trp-detail-title').textContent = 'Trip ' + t.tripId;
+  document.getElementById('trp-detail-body').innerHTML = trp_detailHtml(t);
+  document.getElementById('trp-detail-modal').classList.add('open');
+}
+
+function trp_detailHtml(t) {
+  function row(label, val) {
+    return '<div class="o-detail-item"><label>' + label + '</label><div class="val">' + (val || '—') + '</div></div>';
+  }
+  return '<div class="o-detail-grid">'
+    + row('Trip ID', '<span class="mono">' + o_esc(t.tripId) + '</span>')
+    + row('Status', o_statusBadge(t.status))
+    + row('Request Date', o_esc(t.requestDate))
+    + row('Trip Type', o_esc(t.tripType))
+    + '</div>'
+    + '<div class="o-divider">Requestor & Driver</div>'
+    + '<div class="o-detail-grid">'
+    + row('Requestor', o_esc(t.reqName))
+    + row('Driver', o_esc(t.driverName))
+    + row('Vehicle', o_esc(t.plate))
+    + row('Related JO', o_esc(t.relatedJo))
+    + '</div>'
+    + '<div class="o-divider">Route & Schedule</div>'
+    + '<div class="o-detail-grid">'
+    + row('From', o_esc(t.fromLoc))
+    + row('To', o_esc(t.toLoc))
+    + row('Planned Start', o_esc(t.startDate))
+    + row('Planned End', o_esc(t.endDate))
+    + '</div>'
+    + '<div class="o-divider">Purpose</div>'
+    + '<div style="font-size:13.5px;color:var(--text);line-height:1.6;margin-bottom:14px;">' + o_esc(t.purpose) + '</div>'
+    + (t.status === 'Rejected'  ? '<div class="o-alert o-alert-error"  style="margin-bottom:10px;">❌ Rejection Reason: ' + o_esc(t.rejectReason) + '</div>' : '')
+    + (t.status === 'Cancelled' ? '<div class="o-alert o-alert-warn"   style="margin-bottom:10px;">⚠️ Cancel Reason: ' + o_esc(t.cancelReason) + '</div>' : '')
+    + (t.status === 'Completed'
+        ? '<div class="o-divider">Actual Trip Details</div>'
+          + '<div class="o-detail-grid">'
+          + row('Actual Start', o_esc(t.actualStart))
+          + row('Actual End',   o_esc(t.actualEnd))
+          + row('Start KM', '<span class="mono">' + t.startKm + '</span>')
+          + row('End KM',   '<span class="mono">' + t.endKm   + '</span>')
+          + row('Distance', '<span class="mono" style="color:var(--accent);font-size:15px;">' + t.distance + ' km</span>')
+          + row('Proof', t.proofLink ? '<a href="' + o_esc(t.proofLink) + '" target="_blank" style="color:var(--blue);">View Link</a>' : '—')
+          + row('Remarks', o_esc(t.remarks))
+          + '</div>'
+        : '');
+}
+
+function trp_closeDetail() { document.getElementById('trp-detail-modal').classList.remove('open'); }
+
+function trp_openCancel(id) {
+  trp_cancelId = id;
+  document.getElementById('trp-cancel-reason').value = '';
+  document.getElementById('trp-cancel-modal').classList.add('open');
+}
+
+function trp_submitCancel() {
+  var reason = document.getElementById('trp-cancel-reason').value.trim();
+  if (!reason) { o_toast('error', 'Cancel reason required.'); return; }
+  var btn = document.getElementById('trp-cancel-submit');
+  btn.disabled = true; btn.textContent = 'Cancelling…';
+  google.script.run
+    .withSuccessHandler(function(r) {
+      btn.disabled = false; btn.textContent = 'Confirm Cancel';
+      if (r.success) {
+        o_toast('success', r.message);
+        document.getElementById('trp-cancel-modal').classList.remove('open');
+        trp_reload();
+      } else { o_toast('error', r.message); }
+    })
+    .withFailureHandler(function(e) { btn.disabled = false; btn.textContent = 'Confirm Cancel'; o_toast('error', e.message); })
+    .ops_cancelTrip(trp_cancelId, reason);
+}
+
+// Responsive layout
+function trp_initLayout() {
+  var mob = window.innerWidth < 640;
+  document.getElementById('trp-table-wrap').style.display = mob ? 'none' : 'block';
+  document.getElementById('trp-cards').style.display       = mob ? 'block' : 'none';
+}
+trp_initLayout();
+window.addEventListener('resize', trp_initLayout);
+</script>

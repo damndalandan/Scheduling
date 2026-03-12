@@ -1,0 +1,149 @@
+<!-- TabReports.html — Reports Tab -->
+<style>
+  #tab-reports, #tab-reports * { color: var(--text); }
+  .rpt-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 768px) { .rpt-grid { grid-template-columns: 1fr; } }
+  .rpt-bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; }
+  .rpt-bar-label { width: 140px; font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; }
+  .rpt-bar-track { flex: 1; height: 10px; background: var(--surface2); border-radius: 9999px; overflow: hidden; }
+  .rpt-bar-fill  { height: 100%; border-radius: 9999px; background: var(--accent); transition: width .5s ease; }
+  .rpt-bar-val   { font-size: 12px; font-family: 'DM Mono', monospace; color: var(--text2); width: 50px; text-align: right; }
+</style>
+
+<div style="padding:24px 28px 40px;">
+
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:22px;">
+    <div>
+      <h2 style="font-size:20px;font-weight:800;letter-spacing:-.02em;margin:0 0 3px;">Reports</h2>
+      <p style="font-size:13px;color:var(--text3);margin:0;">Fleet analytics ug summaries</p>
+    </div>
+    <button id="rpt-reload-btn" class="o-btn-reload" onclick="rpt_reload()">
+      <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+      </svg>
+      Reload
+    </button>
+  </div>
+
+  <div id="rpt-loading" style="padding:40px 0;text-align:center;color:var(--text3);">
+    <div class="o-skel" style="width:100%;height:140px;border-radius:12px;margin-bottom:16px;"></div>
+    <div class="o-skel" style="width:100%;height:140px;border-radius:12px;"></div>
+  </div>
+
+  <div id="rpt-content" style="display:none;">
+
+    <!-- Row 1: By Vehicle + By Driver -->
+    <div class="rpt-grid" style="margin-bottom:16px;">
+      <div class="o-card" style="padding:18px;">
+        <div class="o-section-title">Trips by Vehicle</div>
+        <div id="rpt-by-vehicle"></div>
+      </div>
+      <div class="o-card" style="padding:18px;">
+        <div class="o-section-title">Trips by Driver</div>
+        <div id="rpt-by-driver"></div>
+      </div>
+    </div>
+
+    <!-- Row 2: By Type + Mileage Summary -->
+    <div class="rpt-grid" style="margin-bottom:16px;">
+      <div class="o-card" style="padding:18px;">
+        <div class="o-section-title">Trips by Type</div>
+        <div id="rpt-by-type"></div>
+      </div>
+      <div class="o-card" style="padding:18px;">
+        <div class="o-section-title">Vehicle Mileage Summary</div>
+        <div id="rpt-mileage"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+var rpt_data = null;
+
+function init_reports() {
+  document.getElementById('rpt-loading').style.display  = 'block';
+  document.getElementById('rpt-content').style.display  = 'none';
+  google.script.run
+    .withSuccessHandler(function(r) {
+      o_setReloading('rpt-reload-btn', false);
+      if (!r.success) { o_toast('error', r.message); return; }
+      rpt_data = r.report;
+      rpt_render();
+    })
+    .withFailureHandler(function(e) {
+      o_setReloading('rpt-reload-btn', false);
+      o_toast('error', e.message);
+    })
+    .getReportsInitData();
+}
+
+function rpt_reload() {
+  o_setReloading('rpt-reload-btn', true);
+  initializedTabs['reports'] = false;
+  init_reports();
+}
+
+function rpt_render() {
+  if (!rpt_data) return;
+  document.getElementById('rpt-loading').style.display = 'none';
+  document.getElementById('rpt-content').style.display = 'block';
+
+  rpt_renderBarChart('rpt-by-vehicle', rpt_data.byVehicle,  function(v) { return v.count + ' trips · ' + Math.round(v.km) + ' km'; }, function(v) { return v.count; });
+  rpt_renderBarChart('rpt-by-driver',  rpt_data.byDriver,   function(v) { return v.count + ' trips · ' + Math.round(v.km) + ' km'; }, function(v) { return v.count; });
+  rpt_renderTypeChart('rpt-by-type',   rpt_data.byType);
+  rpt_renderMileage('rpt-mileage',     rpt_data.mileageSummary);
+}
+
+function rpt_renderBarChart(elId, data, labelFn, valFn) {
+  var el = document.getElementById(elId);
+  var entries = Object.entries(data || {});
+  if (!entries.length) { el.innerHTML = '<div class="o-empty"><p>Walay data.</p></div>'; return; }
+  entries.sort(function(a, b) { return valFn(b[1]) - valFn(a[1]); });
+  var max = Math.max.apply(null, entries.map(function(e) { return valFn(e[1]); }));
+  el.innerHTML = entries.map(function(e) {
+    var pct = max > 0 ? (valFn(e[1]) / max * 100) : 0;
+    return '<div class="rpt-bar-row">'
+      + '<div class="rpt-bar-label" title="' + o_esc(e[0]) + '">' + o_esc(e[0]) + '</div>'
+      + '<div class="rpt-bar-track"><div class="rpt-bar-fill" style="width:' + pct + '%;"></div></div>'
+      + '<div class="rpt-bar-val">' + labelFn(e[1]) + '</div>'
+      + '</div>';
+  }).join('');
+}
+
+function rpt_renderTypeChart(elId, data) {
+  var el = document.getElementById(elId);
+  var entries = Object.entries(data || {});
+  if (!entries.length) { el.innerHTML = '<div class="o-empty"><p>Walay data.</p></div>'; return; }
+  var total = entries.reduce(function(s, e) { return s + e[1]; }, 0);
+  entries.sort(function(a, b) { return b[1] - a[1]; });
+  var colors = ['var(--accent)', 'var(--blue)', 'var(--green)', 'var(--purple)', 'var(--red)'];
+  el.innerHTML = entries.map(function(e, i) {
+    var pct = total > 0 ? Math.round(e[1] / total * 100) : 0;
+    return '<div class="rpt-bar-row">'
+      + '<div class="rpt-bar-label" title="' + o_esc(e[0]) + '">' + o_esc(e[0]) + '</div>'
+      + '<div class="rpt-bar-track"><div class="rpt-bar-fill" style="width:' + (e[1]/entries[0][1]*100) + '%;background:' + (colors[i] || 'var(--accent)') + ';"></div></div>'
+      + '<div class="rpt-bar-val" style="color:' + (colors[i] || 'var(--accent)') + ';">' + e[1] + ' (' + pct + '%)</div>'
+      + '</div>';
+  }).join('');
+}
+
+function rpt_renderMileage(elId, data) {
+  var el = document.getElementById(elId);
+  if (!data || !data.length) { el.innerHTML = '<div class="o-empty"><p>Walay data.</p></div>'; return; }
+  el.innerHTML = '<div class="o-table-wrap" style="border:none;">'
+    + '<table class="o-table" style="font-size:12px;">'
+    + '<thead><tr><th>Plate</th><th>Brand</th><th>Beg. KM</th><th>Recorded KM</th></tr></thead>'
+    + '<tbody>'
+    + data.map(function(v) {
+        return '<tr>'
+          + '<td style="font-weight:700;">' + o_esc(v.plate) + '</td>'
+          + '<td style="color:var(--text3);">' + o_esc(v.brand || '—') + '</td>'
+          + '<td class="mono">' + (v.begMileage || 0).toLocaleString() + '</td>'
+          + '<td class="mono" style="color:var(--accent);">' + Math.round(v.recordedKm).toLocaleString() + ' km</td>'
+          + '</tr>';
+      }).join('')
+    + '</tbody></table></div>';
+}
+</script>

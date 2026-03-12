@@ -1,0 +1,81 @@
+<!-- TabRenewals.html — Renewal Alerts Tab -->
+<style>#tab-renewals, #tab-renewals * { color: var(--text); }</style>
+
+<div style="padding:24px 28px 40px;">
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:22px;">
+    <div>
+      <h2 style="font-size:20px;font-weight:800;letter-spacing:-.02em;margin:0 0 3px;">Renewal Alerts</h2>
+      <p style="font-size:13px;color:var(--text3);margin:0;">Insurance ug LTO nga mag-expire na</p>
+    </div>
+    <button id="ren-reload-btn" class="o-btn-reload" onclick="ren_reload()">
+      <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+      Reload
+    </button>
+  </div>
+  <div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;">
+    <button class="o-chip active" onclick="ren_setFilter('all',this)">All</button>
+    <button class="o-chip" onclick="ren_setFilter('expired',this)">Expired</button>
+    <button class="o-chip" onclick="ren_setFilter('due',this)">Due Soon</button>
+    <button class="o-chip" onclick="ren_setFilter('ok',this)">OK</button>
+  </div>
+  <div class="o-table-wrap">
+    <table class="o-table">
+      <thead><tr><th>Vehicle ID</th><th>Plate</th><th>Document</th><th>Expiry Date</th><th>Days Left</th><th>Status</th></tr></thead>
+      <tbody id="ren-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+var ren_all = [], ren_filter = 'all';
+
+function init_renewals() {
+  document.getElementById('ren-tbody').innerHTML = o_skelRows(6, 4);
+  google.script.run
+    .withSuccessHandler(function(r) {
+      o_setReloading('ren-reload-btn', false);
+      if (!r.success) { o_toast('error', r.message); return; }
+      ren_all = r.alerts || [];
+      ren_render();
+    })
+    .withFailureHandler(function(e) { o_setReloading('ren-reload-btn', false); o_toast('error', e.message); })
+    .getRenewalsInitData();
+}
+
+function ren_reload() {
+  o_setReloading('ren-reload-btn', true);
+  initializedTabs['renewals'] = false;
+  init_renewals();
+}
+
+function ren_setFilter(f, el) {
+  ren_filter = f;
+  document.querySelectorAll('#tab-renewals .o-chip').forEach(function(c) { c.classList.remove('active'); });
+  el.classList.add('active');
+  ren_render();
+}
+
+function ren_render() {
+  var list = ren_all.filter(function(a) {
+    if (ren_filter === 'expired') return a.daysLeft !== null && a.daysLeft < 0;
+    if (ren_filter === 'due')     return a.daysLeft !== null && a.daysLeft >= 0 && a.daysLeft <= 30;
+    if (ren_filter === 'ok')      return a.daysLeft !== null && a.daysLeft > 30;
+    return true;
+  });
+  var tb = document.getElementById('ren-tbody');
+  if (!list.length) {
+    tb.innerHTML = '<tr><td colspan="6"><div class="o-empty"><div class="o-empty-icon">📄</div><p>Walay renewal alerts.</p></div></td></tr>';
+    return;
+  }
+  tb.innerHTML = list.map(function(a) {
+    return '<tr>'
+      + '<td class="td-id">' + o_esc(a.vehicleId) + '</td>'
+      + '<td style="font-weight:700;">' + o_esc(a.plate) + '</td>'
+      + '<td>' + o_esc(a.docType) + '</td>'
+      + '<td style="font-size:12px;">' + o_esc(a.expiry) + '</td>'
+      + '<td class="mono" style="font-size:12px;">' + (a.daysLeft !== null ? a.daysLeft + ' days' : '—') + '</td>'
+      + '<td>' + o_alertBadge(a.daysLeft) + '</td>'
+      + '</tr>';
+  }).join('');
+}
+</script>

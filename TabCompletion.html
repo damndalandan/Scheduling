@@ -1,0 +1,251 @@
+<!-- TabCompletion.html — Trip Completion Tab -->
+<style>
+  #tab-completion, #tab-completion * { color: var(--text); }
+</style>
+
+<div style="padding:24px 28px 40px;">
+
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:22px;">
+    <div>
+      <h2 style="font-size:20px;font-weight:800;letter-spacing:-.02em;margin:0 0 3px;">Trip Completion</h2>
+      <p style="font-size:13px;color:var(--text3);margin:0;">I-record ang actual details pagbalik sa sakyanan</p>
+    </div>
+    <button id="cmp-reload-btn" class="o-btn-reload" onclick="cmp_reload()">
+      <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+      </svg>
+      Reload
+    </button>
+  </div>
+
+  <div class="o-search-wrap" style="margin-bottom:14px;">
+    <span class="o-search-icon">
+      <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z"/>
+      </svg>
+    </span>
+    <input id="cmp-search" class="o-input" placeholder="Search Trip ID, requestor, plate…" oninput="cmp_apply()">
+  </div>
+
+  <!-- Desktop -->
+  <div id="cmp-table-wrap" class="o-table-wrap">
+    <table class="o-table">
+      <thead>
+        <tr>
+          <th>Trip ID</th><th>Requestor</th><th>Route</th>
+          <th>Vehicle</th><th>Driver</th><th>Planned Start</th><th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="cmp-tbody"></tbody>
+    </table>
+  </div>
+
+  <!-- Mobile cards -->
+  <div id="cmp-cards" style="display:none;"></div>
+
+</div>
+
+<!-- Complete Trip Modal -->
+<div class="o-modal-overlay" id="cmp-modal">
+  <div class="o-modal">
+    <div class="o-modal-header">
+      <div class="o-modal-title" id="cmp-modal-title">Complete Trip</div>
+      <button class="o-modal-close" onclick="document.getElementById('cmp-modal').classList.remove('open')">✕</button>
+    </div>
+    <div class="o-modal-body">
+
+      <div id="cmp-trip-summary" style="padding:12px;background:var(--surface2);border-radius:9px;margin-bottom:18px;font-size:13px;"></div>
+
+      <div class="o-divider" style="margin-top:0;">Actual Date & Time</div>
+      <div class="o-form-grid" style="margin-bottom:16px;">
+        <div class="o-form-group">
+          <label class="o-label">Actual Start *</label>
+          <input type="datetime-local" id="cmp-actual-start" class="o-input">
+        </div>
+        <div class="o-form-group">
+          <label class="o-label">Actual End *</label>
+          <input type="datetime-local" id="cmp-actual-end" class="o-input">
+        </div>
+      </div>
+
+      <div class="o-divider">Mileage (Odometer)</div>
+      <div class="o-form-grid" style="margin-bottom:16px;">
+        <div class="o-form-group">
+          <label class="o-label">Start Mileage (km) *</label>
+          <input type="number" id="cmp-start-km" class="o-input" placeholder="e.g. 12400" oninput="cmp_calcDistance()">
+        </div>
+        <div class="o-form-group">
+          <label class="o-label">End Mileage (km) *</label>
+          <input type="number" id="cmp-end-km" class="o-input" placeholder="e.g. 12550" oninput="cmp_calcDistance()">
+        </div>
+        <div class="o-form-group span2">
+          <div id="cmp-distance-display" style="display:none;background:var(--amber-bg);border:1px solid var(--amber-bd);border-radius:9px;padding:10px 14px;font-size:14px;font-weight:700;color:var(--accent);text-align:center;"></div>
+        </div>
+      </div>
+
+      <div class="o-divider">Proof & Remarks</div>
+      <div class="o-form-grid">
+        <div class="o-form-group span2">
+          <label class="o-label">GPS / Proof Link <span style="color:var(--text3);font-weight:400;">(optional)</span></label>
+          <input id="cmp-proof-link" class="o-input" placeholder="Google Maps link, Drive file, screenshot link…">
+        </div>
+        <div class="o-form-group span2">
+          <label class="o-label">Remarks <span style="color:var(--text3);font-weight:400;">(optional)</span></label>
+          <textarea id="cmp-remarks" class="o-input" placeholder="Any notes about the actual trip…"></textarea>
+        </div>
+      </div>
+
+    </div>
+    <div class="o-modal-footer">
+      <button class="o-btn o-btn-ghost" onclick="document.getElementById('cmp-modal').classList.remove('open')">Cancel</button>
+      <button id="cmp-save-btn" class="o-btn o-btn-primary" onclick="cmp_submit()">✅ Mark as Completed</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var cmp_all = [], cmp_filtered = [], cmp_activeId = null;
+
+function init_completion() {
+  document.getElementById('cmp-tbody').innerHTML = o_skelRows(7, 4);
+  google.script.run
+    .withSuccessHandler(function(r) {
+      o_setReloading('cmp-reload-btn', false);
+      if (!r.success) { o_toast('error', r.message); return; }
+      cmp_all = r.trips || [];
+      cmp_apply();
+    })
+    .withFailureHandler(function(e) {
+      o_setReloading('cmp-reload-btn', false);
+      o_toast('error', e.message);
+    })
+    .getCompletionInitData();
+}
+
+function cmp_reload() {
+  o_setReloading('cmp-reload-btn', true);
+  initializedTabs['completion'] = false;
+  init_completion();
+}
+
+function cmp_apply() {
+  var q = (document.getElementById('cmp-search').value || '').toLowerCase();
+  cmp_filtered = cmp_all.filter(function(t) {
+    if (!q) return true;
+    return (t.tripId + t.reqName + t.plate + t.driverName).toLowerCase().includes(q);
+  });
+  cmp_render();
+}
+
+function cmp_render() {
+  var tb = document.getElementById('cmp-tbody');
+  if (!cmp_filtered.length) {
+    tb.innerHTML = '<tr><td colspan="7"><div class="o-empty"><div class="o-empty-icon">🏁</div><p>Walay approved trips nga naghulat ug completion.</p></div></td></tr>';
+    document.getElementById('cmp-cards').innerHTML = '';
+    return;
+  }
+  tb.innerHTML = cmp_filtered.map(function(t) {
+    return '<tr>'
+      + '<td class="td-id">' + o_esc(t.tripId) + '</td>'
+      + '<td style="font-weight:600;">' + o_esc(t.reqName) + '</td>'
+      + '<td style="font-size:12px;">' + o_esc(t.fromLoc) + ' → ' + o_esc(t.toLoc) + '</td>'
+      + '<td style="font-weight:600;">' + o_esc(t.plate || '—') + '</td>'
+      + '<td>' + o_esc(t.driverName || '—') + '</td>'
+      + '<td style="font-size:12px;color:var(--text3);">' + o_esc(t.startDate || '—') + '</td>'
+      + '<td><button class="o-btn o-btn-primary o-btn-sm" onclick="cmp_openModal(\'' + o_esc(t.tripId) + '\')">🏁 Complete</button></td>'
+      + '</tr>';
+  }).join('');
+
+  document.getElementById('cmp-cards').innerHTML = cmp_filtered.map(function(t) {
+    return '<div class="o-card" style="padding:14px;margin-bottom:10px;">'
+      + '<div style="display:flex;justify-content:space-between;margin-bottom:6px;">'
+      + '<span class="mono" style="font-size:12px;color:var(--text3);">' + o_esc(t.tripId) + '</span>'
+      + o_statusBadge(t.status)
+      + '</div>'
+      + '<div style="font-weight:700;margin-bottom:2px;">' + o_esc(t.reqName) + '</div>'
+      + '<div style="font-size:12px;color:var(--text3);margin-bottom:2px;">' + o_esc(t.fromLoc) + ' → ' + o_esc(t.toLoc) + '</div>'
+      + '<div style="font-size:12px;color:var(--text2);margin-bottom:10px;">' + o_esc(t.plate) + ' · ' + o_esc(t.driverName) + '</div>'
+      + '<button class="o-btn o-btn-primary o-btn-sm" onclick="cmp_openModal(\'' + o_esc(t.tripId) + '\')">🏁 Complete</button>'
+      + '</div>';
+  }).join('');
+}
+
+function cmp_openModal(id) {
+  cmp_activeId = id;
+  var t = cmp_all.find(function(x) { return x.tripId === id; });
+  document.getElementById('cmp-modal-title').textContent = 'Complete Trip ' + id;
+  document.getElementById('cmp-trip-summary').innerHTML = t
+    ? '<strong>' + o_esc(t.tripId) + '</strong> · ' + o_esc(t.reqName)
+      + '<br><span style="color:var(--text3);">' + o_esc(t.fromLoc) + ' → ' + o_esc(t.toLoc)
+      + ' · Driver: ' + o_esc(t.driverName || '—') + '</span>'
+    : id;
+  // Clear fields
+  ['cmp-actual-start','cmp-actual-end','cmp-start-km','cmp-end-km','cmp-proof-link','cmp-remarks'].forEach(function(f) {
+    document.getElementById(f).value = '';
+  });
+  document.getElementById('cmp-distance-display').style.display = 'none';
+  document.getElementById('cmp-modal').classList.add('open');
+}
+
+function cmp_calcDistance() {
+  var s = parseFloat(document.getElementById('cmp-start-km').value) || 0;
+  var e = parseFloat(document.getElementById('cmp-end-km').value)   || 0;
+  var el = document.getElementById('cmp-distance-display');
+  if (s > 0 && e > 0) {
+    var dist = e - s;
+    el.style.display = 'block';
+    if (dist < 0) {
+      el.style.background = 'var(--red-bg)'; el.style.borderColor = 'var(--red-bd)'; el.style.color = 'var(--red)';
+      el.textContent = '⚠️ End mileage dili pwede ubos sa start mileage';
+    } else {
+      el.style.background = 'var(--amber-bg)'; el.style.borderColor = 'var(--amber-bd)'; el.style.color = 'var(--accent)';
+      el.textContent = '📍 Distance: ' + dist + ' km';
+    }
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+function cmp_submit() {
+  var actualStart = document.getElementById('cmp-actual-start').value;
+  var actualEnd   = document.getElementById('cmp-actual-end').value;
+  var startKm     = document.getElementById('cmp-start-km').value;
+  var endKm       = document.getElementById('cmp-end-km').value;
+
+  if (!actualStart) { o_toast('error', 'Actual Start required.'); return; }
+  if (!actualEnd)   { o_toast('error', 'Actual End required.'); return; }
+  if (!startKm)     { o_toast('error', 'Start Mileage required.'); return; }
+  if (!endKm)       { o_toast('error', 'End Mileage required.'); return; }
+  if (parseFloat(endKm) < parseFloat(startKm)) { o_toast('error', 'End mileage dili pwede ubos sa start.'); return; }
+
+  var btn = document.getElementById('cmp-save-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+
+  google.script.run
+    .withSuccessHandler(function(r) {
+      btn.disabled = false; btn.textContent = '✅ Mark as Completed';
+      if (r.success) {
+        o_toast('success', r.message);
+        document.getElementById('cmp-modal').classList.remove('open');
+        cmp_reload();
+        initializedTabs['trips'] = false;
+        initializedTabs['dashboard'] = false;
+      } else { o_toast('error', r.message); }
+    })
+    .withFailureHandler(function(e) { btn.disabled = false; btn.textContent = '✅ Mark as Completed'; o_toast('error', e.message); })
+    .ops_completeTrip({
+      tripId: cmp_activeId, actualStart, actualEnd,
+      startKm, endKm,
+      proofLink : document.getElementById('cmp-proof-link').value,
+      remarks   : document.getElementById('cmp-remarks').value
+    });
+}
+
+function cmp_initLayout() {
+  var mob = window.innerWidth < 640;
+  document.getElementById('cmp-table-wrap').style.display = mob ? 'none' : 'block';
+  document.getElementById('cmp-cards').style.display       = mob ? 'block' : 'none';
+}
+cmp_initLayout();
+window.addEventListener('resize', cmp_initLayout);
+</script>

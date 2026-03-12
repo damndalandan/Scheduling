@@ -1,0 +1,217 @@
+<!-- TabNewTrip.html — New Trip Request Tab -->
+<style>
+  #tab-new-trip, #tab-new-trip * { color: var(--text); }
+  .nt-card { max-width: 800px; margin: 0 auto; }
+</style>
+
+<div style="padding:24px 28px 40px;">
+
+  <div style="max-width:800px;margin:0 auto;">
+    <!-- Header -->
+    <div style="margin-bottom:22px;">
+      <h2 style="font-size:20px;font-weight:800;letter-spacing:-.02em;margin:0 0 3px;">New Trip Request</h2>
+      <p style="font-size:13px;color:var(--text3);margin:0;">I-fill ang details sa imong trip request</p>
+    </div>
+
+    <div class="o-card" style="padding:24px;">
+
+      <!-- Section: Requestor Info -->
+      <div class="o-divider" style="margin-top:0;">Requestor Information</div>
+      <div class="o-form-grid" style="margin-bottom:18px;">
+        <div class="o-form-group">
+          <label class="o-label">Requestor Name *</label>
+          <input id="nt-req-name" class="o-input" placeholder="Full name">
+        </div>
+        <div class="o-form-group">
+          <label class="o-label">Employee ID <span style="color:var(--text3);font-weight:400;">(optional)</span></label>
+          <input id="nt-req-empid" class="o-input" placeholder="e.g. EMP-001">
+        </div>
+      </div>
+
+      <!-- Section: Trip Details -->
+      <div class="o-divider">Trip Details</div>
+      <div class="o-form-grid" style="margin-bottom:18px;">
+        <div class="o-form-group">
+          <label class="o-label">Trip Type *</label>
+          <select id="nt-trip-type" class="o-input">
+            <option value="">-- Select Type --</option>
+            <option>Owner Errand</option>
+            <option>Supplier Delivery - Ormoc</option>
+            <option>Supplier Delivery - Outside Ormoc</option>
+            <option>Signage Installation</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="o-form-group">
+          <label class="o-label">Related JO <span style="color:var(--text3);font-weight:400;">(optional)</span></label>
+          <input id="nt-related-jo" class="o-input" placeholder="e.g. JO-2026-0001">
+        </div>
+        <div class="o-form-group span2">
+          <label class="o-label">Purpose *</label>
+          <textarea id="nt-purpose" class="o-input" placeholder="Describe the purpose of this trip…"></textarea>
+        </div>
+      </div>
+
+      <!-- Section: Route -->
+      <div class="o-divider">Route & Schedule</div>
+      <div class="o-form-grid" style="margin-bottom:18px;">
+        <div class="o-form-group">
+          <label class="o-label">From Location *</label>
+          <input id="nt-from" class="o-input" placeholder="e.g. Ormoc City Hall">
+        </div>
+        <div class="o-form-group">
+          <label class="o-label">To Location *</label>
+          <input id="nt-to" class="o-input" placeholder="e.g. Cebu Supplier Warehouse">
+        </div>
+        <div class="o-form-group">
+          <label class="o-label">Planned Start *</label>
+          <input type="datetime-local" id="nt-start-date" class="o-input">
+        </div>
+        <div class="o-form-group">
+          <label class="o-label">Planned End *</label>
+          <input type="datetime-local" id="nt-end-date" class="o-input">
+        </div>
+      </div>
+
+      <!-- Section: Vehicle & Driver -->
+      <div class="o-divider">Vehicle & Driver</div>
+      <div id="nt-veh-note" class="o-alert o-alert-info" style="margin-bottom:14px;font-size:12px;">
+        ℹ️ Vehicle ug Driver pwede i-fill later. Required lang kung i-submit na.
+      </div>
+      <div class="o-form-grid" style="margin-bottom:18px;">
+        <div class="o-form-group">
+          <label class="o-label">Vehicle</label>
+          <select id="nt-vehicle-id" class="o-input" onchange="nt_onVehicleChange()">
+            <option value="">-- Select Vehicle --</option>
+          </select>
+        </div>
+        <div class="o-form-group">
+          <label class="o-label">Plate Number</label>
+          <input id="nt-plate" class="o-input" placeholder="Auto-filled" readonly style="background:var(--surface);cursor:not-allowed;color:var(--text2);">
+        </div>
+        <div class="o-form-group">
+          <label class="o-label">Driver Name</label>
+          <input id="nt-driver-name" class="o-input" placeholder="Driver's full name">
+        </div>
+        <div class="o-form-group">
+          <label class="o-label">Driver Employee ID <span style="color:var(--text3);font-weight:400;">(optional)</span></label>
+          <input id="nt-driver-empid" class="o-input" placeholder="e.g. EMP-002">
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;padding-top:8px;border-top:1px solid var(--border);">
+        <button class="o-btn o-btn-ghost" onclick="nt_reset()">Clear</button>
+        <button id="nt-draft-btn" class="o-btn o-btn-ghost" onclick="nt_saveTrip('Draft')">
+          💾 Save as Draft
+        </button>
+        <button id="nt-submit-btn" class="o-btn o-btn-primary" onclick="nt_saveTrip('Submitted')">
+          📤 Submit for Approval
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+var nt_vehicles = [];
+
+function init_new_trip() {
+  // Load vehicles dropdown — parallel with nothing else but uses combined call
+  google.script.run
+    .withSuccessHandler(function(r) {
+      if (!r.success) return;
+      nt_vehicles = (r.vehicles || []).filter(function(v) { return v.status === 'Active'; });
+      nt_populateVehicles();
+    })
+    .getTripsInitData();
+}
+
+function nt_populateVehicles() {
+  var sel = document.getElementById('nt-vehicle-id');
+  sel.innerHTML = '<option value="">-- Select Vehicle --</option>'
+    + nt_vehicles.map(function(v) {
+        return '<option value="' + o_esc(v.vehicleId) + '" data-plate="' + o_esc(v.plate) + '">'
+          + o_esc(v.plate) + ' — ' + o_esc(v.type) + (v.brand ? ' (' + o_esc(v.brand) + ')' : '')
+          + '</option>';
+      }).join('');
+}
+
+function nt_onVehicleChange() {
+  var sel  = document.getElementById('nt-vehicle-id');
+  var opt  = sel.options[sel.selectedIndex];
+  document.getElementById('nt-plate').value = opt ? (opt.getAttribute('data-plate') || '') : '';
+}
+
+function nt_reset() {
+  ['nt-req-name','nt-req-empid','nt-related-jo','nt-purpose',
+   'nt-from','nt-to','nt-start-date','nt-end-date',
+   'nt-driver-name','nt-driver-empid','nt-plate'].forEach(function(id) {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('nt-trip-type').value  = '';
+  document.getElementById('nt-vehicle-id').value = '';
+}
+
+function nt_saveTrip(status) {
+  // Validate base fields
+  var reqName   = document.getElementById('nt-req-name').value.trim();
+  var tripType  = document.getElementById('nt-trip-type').value;
+  var purpose   = document.getElementById('nt-purpose').value.trim();
+  var fromLoc   = document.getElementById('nt-from').value.trim();
+  var toLoc     = document.getElementById('nt-to').value.trim();
+  var startDate = document.getElementById('nt-start-date').value;
+  var endDate   = document.getElementById('nt-end-date').value;
+
+  if (!reqName)   { o_toast('error', 'Requestor Name required.'); return; }
+  if (!tripType)  { o_toast('error', 'Trip Type required.'); return; }
+  if (!purpose)   { o_toast('error', 'Purpose required.'); return; }
+  if (!fromLoc)   { o_toast('error', 'From Location required.'); return; }
+  if (!toLoc)     { o_toast('error', 'To Location required.'); return; }
+  if (!startDate) { o_toast('error', 'Planned Start required.'); return; }
+  if (!endDate)   { o_toast('error', 'Planned End required.'); return; }
+
+  var vehicleId  = document.getElementById('nt-vehicle-id').value;
+  var plate      = document.getElementById('nt-plate').value.trim();
+  var driverName = document.getElementById('nt-driver-name').value.trim();
+
+  if (status === 'Submitted') {
+    if (!vehicleId)  { o_toast('error', 'Vehicle required para i-submit.'); return; }
+    if (!driverName) { o_toast('error', 'Driver required para i-submit.'); return; }
+  }
+
+  var draftBtn  = document.getElementById('nt-draft-btn');
+  var submitBtn = document.getElementById('nt-submit-btn');
+  draftBtn.disabled = true; submitBtn.disabled = true;
+  submitBtn.textContent = status === 'Submitted' ? 'Submitting…' : 'Saving…';
+
+  var payload = {
+    reqName, reqEmpId: document.getElementById('nt-req-empid').value.trim(),
+    tripType, purpose, relatedJo: document.getElementById('nt-related-jo').value.trim(),
+    fromLoc, toLoc, startDate, endDate,
+    vehicleId, plate,
+    driverEmpId: document.getElementById('nt-driver-empid').value.trim(),
+    driverName, status
+  };
+
+  google.script.run
+    .withSuccessHandler(function(r) {
+      draftBtn.disabled = false; submitBtn.disabled = false;
+      submitBtn.textContent = '📤 Submit for Approval';
+      if (r.success) {
+        o_toast('success', r.message);
+        nt_reset();
+        // Reset trips tab so it reloads fresh
+        initializedTabs['trips'] = false;
+        initializedTabs['approval'] = false;
+      } else { o_toast('error', r.message); }
+    })
+    .withFailureHandler(function(e) {
+      draftBtn.disabled = false; submitBtn.disabled = false;
+      submitBtn.textContent = '📤 Submit for Approval';
+      o_toast('error', e.message);
+    })
+    .ops_saveTrip(payload);
+}
+</script>

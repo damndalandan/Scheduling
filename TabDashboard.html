@@ -1,0 +1,129 @@
+<!-- TabDashboard.html — Dashboard Tab -->
+<style>
+  #tab-dashboard, #tab-dashboard * { color: var(--text); }
+  .db-stat-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 20px; }
+  .db-stat-card { padding: 18px 20px; }
+  .db-stat-val  { font-size: 28px; font-weight: 800; margin-top: 6px; font-family: 'DM Mono', monospace; }
+  @media (max-width: 900px) { .db-stat-row { grid-template-columns: repeat(2, 1fr); } }
+</style>
+
+<div style="padding:24px 28px 40px;">
+
+  <!-- Header -->
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:22px;">
+    <div>
+      <h2 style="font-size:20px;font-weight:800;letter-spacing:-.02em;margin:0 0 3px;">Dashboard</h2>
+      <p style="font-size:13px;color:var(--text3);margin:0;">Fleet overview at a glance</p>
+    </div>
+    <button id="db-reload-btn" class="o-btn-reload" onclick="db_reload()">
+      <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+      </svg>
+      Reload
+    </button>
+  </div>
+
+  <!-- Stat cards -->
+  <div class="db-stat-row" id="db-stats">
+    <div class="o-card db-stat-card"><div class="o-stat-label">Total Trips</div><div class="db-stat-val"><div class="o-skel" style="width:40px;height:28px;"></div></div></div>
+    <div class="o-card db-stat-card"><div class="o-stat-label">For Approval</div><div class="db-stat-val"><div class="o-skel" style="width:30px;height:28px;"></div></div></div>
+    <div class="o-card db-stat-card"><div class="o-stat-label">Approved</div><div class="db-stat-val"><div class="o-skel" style="width:30px;height:28px;"></div></div></div>
+    <div class="o-card db-stat-card"><div class="o-stat-label">Completed</div><div class="db-stat-val"><div class="o-skel" style="width:30px;height:28px;"></div></div></div>
+    <div class="o-card db-stat-card"><div class="o-stat-label">Active Vehicles</div><div class="db-stat-val"><div class="o-skel" style="width:30px;height:28px;"></div></div></div>
+  </div>
+
+  <!-- Two column: recent + alerts -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+    <div class="o-card" style="padding:18px;">
+      <div class="o-section-title">Recent Trips</div>
+      <div id="db-recent"><div class="o-skel" style="width:100%;height:14px;margin-bottom:10px;"></div><div class="o-skel" style="width:90%;height:14px;margin-bottom:10px;"></div><div class="o-skel" style="width:95%;height:14px;"></div></div>
+    </div>
+    <div class="o-card" style="padding:18px;">
+      <div class="o-section-title">⚠️ Renewal Alerts</div>
+      <div id="db-alerts"><div class="o-skel" style="width:100%;height:14px;margin-bottom:10px;"></div><div class="o-skel" style="width:80%;height:14px;"></div></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+var db_data = null;
+
+function init_dashboard() {
+  db_showSkeleton();
+  google.script.run
+    .withSuccessHandler(function(r) {
+      o_setReloading('db-reload-btn', false);
+      if (!r.success) { o_toast('error', r.message); return; }
+      db_data = r;
+      db_render();
+    })
+    .withFailureHandler(function(e) { o_setReloading('db-reload-btn', false); o_toast('error', e.message); })
+    .getDashboardInitData();
+}
+
+function db_reload() {
+  o_setReloading('db-reload-btn', true);
+  initializedTabs['dashboard'] = false;
+  init_dashboard();
+}
+
+function db_showSkeleton() {
+  document.getElementById('db-recent').innerHTML =
+    [1,2,3].map(function() {
+      return '<div style="padding:9px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;">'
+        + '<div><div class="o-skel" style="width:100px;height:13px;margin-bottom:5px;"></div><div class="o-skel" style="width:140px;height:11px;"></div></div>'
+        + '<div class="o-skel" style="width:70px;height:20px;border-radius:20px;"></div>'
+        + '</div>';
+    }).join('');
+}
+
+function db_render() {
+  if (!db_data) return;
+  var s = db_data.stats || {};
+
+  // Stats
+  var colors = [
+    { label:'Total Trips',    val: s.total    || 0, color:'var(--accent)' },
+    { label:'For Approval',   val: s.pending  || 0, color:'var(--blue)' },
+    { label:'Approved',       val: s.approved || 0, color:'var(--green)' },
+    { label:'Completed',      val: s.completed|| 0, color:'var(--purple)' },
+    { label:'Active Vehicles',val: s.vehicles || 0, color:'var(--green)' }
+  ];
+  document.getElementById('db-stats').innerHTML = colors.map(function(c) {
+    return '<div class="o-card db-stat-card">'
+      + '<div class="o-stat-label">' + c.label + '</div>'
+      + '<div class="db-stat-val" style="color:' + c.color + ';">' + c.val + '</div>'
+      + '</div>';
+  }).join('');
+
+  // Recent trips
+  var recent = db_data.recent || [];
+  document.getElementById('db-recent').innerHTML = recent.length
+    ? recent.map(function(t) {
+        return '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);">'
+          + '<div>'
+          + '<div style="font-size:13px;font-weight:700;" class="mono">' + o_esc(t.tripId) + ' <span style="color:var(--text3);font-weight:400;font-family:\'DM Sans\',sans-serif;">' + o_esc(t.reqName) + '</span></div>'
+          + '<div style="font-size:12px;color:var(--text3);">' + o_esc(t.fromLoc) + ' → ' + o_esc(t.toLoc) + '</div>'
+          + '</div>'
+          + o_statusBadge(t.status)
+          + '</div>';
+      }).join('')
+    : '<div class="o-empty"><p>Wala pay trips.</p></div>';
+
+  // Alerts
+  var alerts = db_data.alerts || [];
+  var critical = alerts.filter(function(a) { return a.daysLeft !== null && a.daysLeft <= 30; });
+  document.getElementById('db-alerts').innerHTML = critical.length
+    ? critical.map(function(a) {
+        return '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);">'
+          + '<div>'
+          + '<div style="font-size:13px;font-weight:700;">' + o_esc(a.plate) + '</div>'
+          + '<div style="font-size:12px;color:var(--text3);">' + o_esc(a.docType) + ' · ' + o_esc(a.expiry) + '</div>'
+          + '</div>'
+          + o_alertBadge(a.daysLeft)
+          + '</div>';
+      }).join('')
+    : '<div style="font-size:13px;color:var(--text3);padding:12px 0;">✅ All documents OK.</div>';
+}
+</script>

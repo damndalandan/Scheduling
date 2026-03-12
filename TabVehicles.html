@@ -1,0 +1,255 @@
+<!-- TabVehicles.html — Vehicle Master Tab -->
+<style>
+  #tab-vehicles, #tab-vehicles * { color: var(--text); }
+</style>
+
+<div style="padding:24px 28px 40px;">
+
+  <!-- Header -->
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:22px;">
+    <div>
+      <h2 style="font-size:20px;font-weight:800;letter-spacing:-.02em;margin:0 0 3px;">Vehicle Master</h2>
+      <p style="font-size:13px;color:var(--text3);margin:0;">I-manage ang tanan nga sakyanan</p>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button id="veh-reload-btn" class="o-btn-reload" onclick="veh_reload()">
+        <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+        </svg>
+        Reload
+      </button>
+      <button class="o-btn o-btn-primary" onclick="veh_openModal()">+ Add Vehicle</button>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
+    <div class="o-search-wrap" style="flex:1;min-width:200px;">
+      <span class="o-search-icon"><svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z"/></svg></span>
+      <input id="veh-search" class="o-input" placeholder="Search plate / brand..." oninput="veh_apply()">
+    </div>
+    <select id="veh-status-filter" class="o-input" style="width:auto;" onchange="veh_apply()">
+      <option value="">All Status</option>
+      <option>Active</option><option>Under Repair</option><option>Inactive</option>
+    </select>
+    <span id="veh-count" style="font-size:12px;color:var(--text3);font-weight:600;white-space:nowrap;"></span>
+  </div>
+
+  <!-- Table -->
+  <div class="o-table-wrap">
+    <table class="o-table">
+      <thead>
+        <tr>
+          <th>Vehicle ID</th><th>Plate</th><th>Type</th><th>Brand/Model</th>
+          <th>Status</th><th>Insurance Expiry</th><th>LTO Expiry</th><th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="veh-tbody"></tbody>
+    </table>
+  </div>
+  <div id="veh-pagination" style="display:flex;align-items:center;gap:6px;margin-top:14px;flex-wrap:wrap;"></div>
+
+</div>
+
+<!-- Vehicle Modal -->
+<div class="o-modal-overlay" id="veh-modal">
+  <div class="o-modal">
+    <div class="o-modal-header">
+      <div class="o-modal-title" id="veh-modal-title">Add Vehicle</div>
+      <button class="o-modal-close" onclick="veh_closeModal()">✕</button>
+    </div>
+    <div class="o-modal-body">
+      <div class="o-form-grid">
+        <div class="o-form-group">
+          <label class="o-label">Plate Number *</label>
+          <input id="veh-plate" class="o-input" placeholder="e.g. ABC-1234">
+        </div>
+        <div class="o-form-group">
+          <label class="o-label">Vehicle Type *</label>
+          <select id="veh-type" class="o-input">
+            <option value="">-- Select --</option>
+            <option>Van</option><option>Truck</option><option>Motorcycle</option>
+            <option>Car</option><option>Tricycle</option>
+          </select>
+        </div>
+        <div class="o-form-group">
+          <label class="o-label">Brand / Model</label>
+          <input id="veh-brand" class="o-input" placeholder="e.g. Toyota Hi-Ace">
+        </div>
+        <div class="o-form-group">
+          <label class="o-label">Beginning Mileage</label>
+          <input type="number" id="veh-mileage" class="o-input" placeholder="0">
+        </div>
+        <div class="o-form-group">
+          <label class="o-label">Status *</label>
+          <select id="veh-status" class="o-input">
+            <option>Active</option><option>Under Repair</option><option>Inactive</option>
+          </select>
+        </div>
+        <div class="o-form-group">
+          <label class="o-label">Insurance Expiry</label>
+          <input type="date" id="veh-ins-expiry" class="o-input">
+        </div>
+        <div class="o-form-group span2">
+          <label class="o-label">Insurance PDF Link</label>
+          <input id="veh-ins-link" class="o-input" placeholder="Google Drive link (optional)">
+        </div>
+        <div class="o-form-group">
+          <label class="o-label">LTO Expiry</label>
+          <input type="date" id="veh-lto-expiry" class="o-input">
+        </div>
+        <div class="o-form-group span2">
+          <label class="o-label">LTO PDF Link</label>
+          <input id="veh-lto-link" class="o-input" placeholder="Google Drive link (optional)">
+        </div>
+        <div class="o-form-group span2">
+          <label class="o-label">Notes</label>
+          <textarea id="veh-notes" class="o-input" placeholder="Optional notes..."></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="o-modal-footer">
+      <button class="o-btn o-btn-ghost" onclick="veh_closeModal()">Cancel</button>
+      <button id="veh-save-btn" class="o-btn o-btn-primary" onclick="veh_save()">Save Vehicle</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var veh_all = [], veh_filtered = [], veh_editId = null;
+var veh_page = 1, veh_pageSize = 15;
+
+function init_vehicles() {
+  veh_showSkeleton();
+  google.script.run
+    .withSuccessHandler(function(r) {
+      o_setReloading('veh-reload-btn', false);
+      if (!r.success) { o_toast('error', r.message); return; }
+      veh_all = r.vehicles || [];
+      veh_page = 1;
+      veh_apply();
+    })
+    .withFailureHandler(function(e) { o_setReloading('veh-reload-btn', false); o_toast('error', e.message); })
+    .getVehiclesInitData();
+}
+
+function veh_reload() {
+  o_setReloading('veh-reload-btn', true);
+  initializedTabs['vehicles'] = false;
+  init_vehicles();
+}
+
+function veh_showSkeleton() {
+  document.getElementById('veh-tbody').innerHTML = o_skelRows(7, 5);
+}
+
+function veh_apply() {
+  var q  = (document.getElementById('veh-search').value || '').toLowerCase();
+  var sf = document.getElementById('veh-status-filter').value;
+  veh_filtered = veh_all.filter(function(v) {
+    return (!q  || (v.plate + ' ' + v.brand).toLowerCase().includes(q))
+        && (!sf || v.status === sf);
+  });
+  document.getElementById('veh-count').textContent = veh_filtered.length + ' vehicle' + (veh_filtered.length !== 1 ? 's' : '');
+  veh_renderPage();
+  o_renderPagination('veh-pagination', veh_page, Math.ceil(veh_filtered.length / veh_pageSize), 'veh_goPage');
+}
+
+function veh_goPage(p) {
+  var total = Math.ceil(veh_filtered.length / veh_pageSize);
+  if (p < 1 || p > total) return;
+  veh_page = p;
+  veh_renderPage();
+  o_renderPagination('veh-pagination', veh_page, total, 'veh_goPage');
+}
+
+function veh_renderPage() {
+  var start = (veh_page - 1) * veh_pageSize;
+  var slice = veh_filtered.slice(start, start + veh_pageSize);
+  var tb = document.getElementById('veh-tbody');
+  if (!slice.length) {
+    tb.innerHTML = '<tr><td colspan="8"><div class="o-empty"><div class="o-empty-icon">🚗</div><p>Wala pay sakyanan.</p></div></td></tr>';
+    return;
+  }
+  tb.innerHTML = slice.map(function(v) {
+    var insD = v.insExpiry ? veh_daysLeft(v.insExpiry) : null;
+    var ltoD = v.ltoExpiry ? veh_daysLeft(v.ltoExpiry) : null;
+    return '<tr>'
+      + '<td class="td-id">' + o_esc(v.vehicleId) + '</td>'
+      + '<td style="font-weight:700;">' + o_esc(v.plate) + '</td>'
+      + '<td>' + o_esc(v.type) + '</td>'
+      + '<td style="color:var(--text2);">' + o_esc(v.brand || '—') + '</td>'
+      + '<td>' + o_vehBadge(v.status) + '</td>'
+      + '<td style="font-size:12px;">' + o_esc(v.insExpiry || '—') + ' ' + o_alertBadge(insD) + '</td>'
+      + '<td style="font-size:12px;">' + o_esc(v.ltoExpiry || '—') + ' ' + o_alertBadge(ltoD) + '</td>'
+      + '<td><div class="td-actions"><button class="o-btn o-btn-ghost o-btn-sm" onclick="veh_openModal(\'' + o_esc(v.vehicleId) + '\')">✏️ Edit</button></div></td>'
+      + '</tr>';
+  }).join('');
+}
+
+function veh_daysLeft(d) {
+  if (!d) return null;
+  return Math.ceil((new Date(d) - new Date()) / 86400000);
+}
+
+function veh_openModal(id) {
+  veh_editId = id || null;
+  document.getElementById('veh-modal-title').textContent = id ? 'Edit Vehicle' : 'Add Vehicle';
+  var fields = ['veh-plate','veh-type','veh-brand','veh-mileage','veh-ins-expiry','veh-ins-link','veh-lto-expiry','veh-lto-link','veh-notes'];
+  fields.forEach(function(f) { document.getElementById(f).value = ''; });
+  document.getElementById('veh-status').value = 'Active';
+  if (id) {
+    var v = veh_all.find(function(x) { return x.vehicleId === id; });
+    if (v) {
+      document.getElementById('veh-plate').value      = v.plate;
+      document.getElementById('veh-type').value       = v.type;
+      document.getElementById('veh-brand').value      = v.brand || '';
+      document.getElementById('veh-mileage').value    = v.begMileage || '';
+      document.getElementById('veh-status').value     = v.status;
+      document.getElementById('veh-ins-expiry').value = v.insExpiry || '';
+      document.getElementById('veh-ins-link').value   = v.insLink   || '';
+      document.getElementById('veh-lto-expiry').value = v.ltoExpiry || '';
+      document.getElementById('veh-lto-link').value   = v.ltoLink   || '';
+      document.getElementById('veh-notes').value      = v.notes     || '';
+    }
+  }
+  document.getElementById('veh-modal').classList.add('open');
+}
+
+function veh_closeModal() { document.getElementById('veh-modal').classList.remove('open'); }
+
+function veh_save() {
+  var plate = document.getElementById('veh-plate').value.trim();
+  var type  = document.getElementById('veh-type').value;
+  if (!plate || !type) { o_toast('error', 'Plate Number ug Vehicle Type required.'); return; }
+
+  var btn = document.getElementById('veh-save-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+
+  var payload = {
+    vehicleId : veh_editId,
+    plate, type,
+    brand     : document.getElementById('veh-brand').value,
+    begMileage: document.getElementById('veh-mileage').value,
+    status    : document.getElementById('veh-status').value,
+    insExpiry : document.getElementById('veh-ins-expiry').value,
+    insLink   : document.getElementById('veh-ins-link').value,
+    ltoExpiry : document.getElementById('veh-lto-expiry').value,
+    ltoLink   : document.getElementById('veh-lto-link').value,
+    notes     : document.getElementById('veh-notes').value
+  };
+
+  var fn = veh_editId ? 'ops_updateVehicle' : 'ops_addVehicle';
+  google.script.run
+    .withSuccessHandler(function(r) {
+      btn.disabled = false; btn.textContent = 'Save Vehicle';
+      if (r.success) {
+        o_toast('success', r.message);
+        veh_closeModal();
+        veh_reload();
+      } else { o_toast('error', r.message); }
+    })
+    .withFailureHandler(function(e) { btn.disabled = false; btn.textContent = 'Save Vehicle'; o_toast('error', e.message); })
+    [fn](payload);
+}
+</script>
