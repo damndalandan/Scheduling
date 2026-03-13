@@ -155,9 +155,15 @@ function init_new_trip() {
       nt_joFiltered = nt_joList.slice();
       var joInput = document.getElementById('nt-jo-search');
       joInput.disabled = false;
-      joInput.placeholder = nt_joList.length
-        ? 'Search JO number or description… (' + nt_joList.length + ' JOs)'
-        : 'No JOs found in Line-up JOs';
+      if (nt_joList.length) {
+        joInput.placeholder = 'Search JO number or description… (' + nt_joList.length + ' JOs)';
+      } else {
+        // Show actual backend message so we can debug
+        var joMsg = r.joError || 'No JOs found in Line-up JOs';
+        joInput.placeholder = joMsg;
+        joInput.title = joMsg; // tooltip on hover
+        console.warn('JO load issue:', joMsg);
+      }
     })
     .withFailureHandler(function(e) {
       document.getElementById('nt-jo-search').disabled = false;
