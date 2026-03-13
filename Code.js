@@ -307,6 +307,62 @@ function ops_getSettings_() {
 }
 
 // ============================================================
+//  JO DATABASE — fetch from external linked spreadsheet
+// ============================================================
+function ops_getJOList() {
+  try {
+    // 1. Read the JODatabase URL from DatabaseLink sheet in this spreadsheet
+    const ss      = SpreadsheetApp.getActiveSpreadsheet();
+    const linkSh  = ss.getSheetByName('DatabaseLink');
+    if (!linkSh) return { success: false, message: 'DatabaseLink sheet not found.' };
+
+    // Find the row where column A contains 'JODatabase' (case-insensitive)
+    const linkLr  = linkSh.getLastRow();
+    if (linkLr < 2) return { success: false, message: 'DatabaseLink sheet is empty.' };
+    const linkData = linkSh.getRange(2, 1, linkLr - 1, 3).getValues();
+
+    let joUrl = '';
+    for (let i = 0; i < linkData.length; i++) {
+      const name = String(linkData[i][0] || '').trim().toLowerCase();
+      const link = String(linkData[i][1] || '').trim();
+      if (name === 'jodatabase' && link) { joUrl = link; break; }
+    }
+    if (!joUrl) return { success: false, message: 'JODatabase URL not found in DatabaseLink sheet.' };
+
+    // 2. Open external JODatabase spreadsheet
+    let extSS;
+    try {
+      extSS = SpreadsheetApp.openByUrl(joUrl);
+    } catch(e) {
+      return { success: false, message: 'Cannot open JODatabase. Check sharing permissions: ' + e.message };
+    }
+
+    // 3. Get Line-up JOs sheet
+    const joSh = extSS.getSheetByName('Line-up JOs');
+    if (!joSh) return { success: false, message: '"Line-up JOs" sheet not found in JODatabase.' };
+
+    // 4. Read Column I (index 8) = Job Description, Column L (index 11) = JO Number
+    const lr = joSh.getLastRow();
+    if (lr < 2) return { success: true, data: [] };
+
+    const data = joSh.getRange(2, 1, lr - 1, 12).getValues(); // cols A-L
+
+    const list = [];
+    data.forEach(function(r) {
+      const joNumber  = String(r[11] || '').trim(); // Column L
+      const jobDesc   = String(r[8]  || '').trim(); // Column I
+      if (joNumber) {
+        list.push({ joNumber, jobDesc });
+      }
+    });
+
+    return { success: true, data: list };
+  } catch(e) {
+    return { success: false, message: 'Error fetching JO list: ' + e.message };
+  }
+}
+
+// ============================================================
 //  COMBINED INIT DATA (one call per tab)
 // ============================================================
 
@@ -340,7 +396,9 @@ function getTripsInitData() {
     const user     = ops_getUserInfo_();
     const trips    = ops_getAllTrips_();
     const vehicles = ops_getAllVehicles_();
-    return { success: true, user, trips, vehicles };
+    const joResult = ops_getJOList();
+    const joList   = joResult.success ? joResult.data : [];
+    return { success: true, user, trips, vehicles, joList };
   } catch(e) { return { success: false, message: e.message }; }
 }
 

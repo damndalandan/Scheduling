@@ -42,9 +42,27 @@
             <option>Other</option>
           </select>
         </div>
-        <div class="o-form-group">
+        <div class="o-form-group" style="position:relative;">
           <label class="o-label">Related JO <span style="color:var(--text3);font-weight:400;">(optional)</span></label>
-          <input id="nt-related-jo" class="o-input" placeholder="e.g. JO-2026-0001">
+          <div style="position:relative;">
+            <input id="nt-jo-search" class="o-input" placeholder="Search JO number or description…"
+              autocomplete="off"
+              oninput="nt_filterJO()"
+              onfocus="nt_showJODropdown()"
+              onblur="setTimeout(nt_hideJODropdown, 200)"
+              style="padding-right:80px;">
+            <div id="nt-jo-selected-badge" style="display:none;position:absolute;right:10px;top:50%;transform:translateY(-50%);
+              background:var(--amber-bg);border:1px solid var(--amber-bd);border-radius:6px;
+              padding:2px 8px;font-size:11px;font-weight:700;color:var(--accent);white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis;">
+            </div>
+          </div>
+          <div id="nt-jo-dropdown" style="display:none;position:absolute;z-index:200;left:0;right:0;top:100%;
+            background:var(--surface);border:1.5px solid var(--accent);border-radius:10px;
+            max-height:220px;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.5);margin-top:3px;">
+            <div id="nt-jo-list"></div>
+          </div>
+          <!-- Hidden field that stores the actual JO number to submit -->
+          <input type="hidden" id="nt-related-jo">
         </div>
         <div class="o-form-group span2">
           <label class="o-label">Purpose *</label>
@@ -116,16 +134,115 @@
 
 <script>
 var nt_vehicles = [];
+var nt_joList   = [];    // full JO list from JODatabase
+var nt_joFiltered = [];  // currently filtered
 
 function init_new_trip() {
-  // Load vehicles dropdown — parallel with nothing else but uses combined call
+  // Show JO field loading state
+  document.getElementById('nt-jo-search').placeholder = 'Loading JOs…';
+  document.getElementById('nt-jo-search').disabled = true;
+
   google.script.run
     .withSuccessHandler(function(r) {
-      if (!r.success) return;
+      if (!r.success) { o_toast('error', r.message || 'Init failed'); return; }
+
+      // Vehicles
       nt_vehicles = (r.vehicles || []).filter(function(v) { return v.status === 'Active'; });
       nt_populateVehicles();
+
+      // JO list
+      nt_joList = r.joList || [];
+      nt_joFiltered = nt_joList.slice();
+      var joInput = document.getElementById('nt-jo-search');
+      joInput.disabled = false;
+      joInput.placeholder = nt_joList.length
+        ? 'Search JO number or description… (' + nt_joList.length + ' JOs)'
+        : 'No JOs found in Line-up JOs';
+    })
+    .withFailureHandler(function(e) {
+      document.getElementById('nt-jo-search').disabled = false;
+      document.getElementById('nt-jo-search').placeholder = 'Error loading JOs — type manually';
+      o_toast('error', 'JO load failed: ' + e.message);
     })
     .getTripsInitData();
+}
+
+// ── JO Dropdown logic ──
+function nt_filterJO() {
+  var q = (document.getElementById('nt-jo-search').value || '').toLowerCase().trim();
+  nt_joFiltered = q
+    ? nt_joList.filter(function(j) {
+        return j.joNumber.toLowerCase().includes(q) || j.jobDesc.toLowerCase().includes(q);
+      })
+    : nt_joList.slice();
+
+  // Clear selection if user is typing again
+  document.getElementById('nt-related-jo').value = '';
+  document.getElementById('nt-jo-selected-badge').style.display = 'none';
+
+  nt_renderJOList();
+  nt_showJODropdown();
+}
+
+function nt_renderJOList() {
+  var container = document.getElementById('nt-jo-list');
+  if (!nt_joFiltered.length) {
+    container.innerHTML = '<div style="padding:12px 14px;font-size:13px;color:var(--text3);text-align:center;">Walay nakit-an nga JO.</div>';
+    return;
+  }
+
+  // Use index-based onclick to avoid ALL quote escaping issues
+  var slice = nt_joFiltered.slice(0, 80);
+  var rows = '';
+  for (var i = 0; i < slice.length; i++) {
+    var j = slice[i];
+    rows += '<div class="nt-jo-item" data-idx="' + i + '">'
+          +   '<div style="font-family:DM Mono,monospace;font-size:12px;font-weight:700;color:var(--accent);">' + o_esc(j.joNumber) + '</div>'
+          +   '<div style="font-size:12px;color:var(--text2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + o_esc(j.jobDesc || '—') + '</div>'
+          + '</div>';
+  }
+  container.innerHTML = rows;
+
+  // Attach events via JS — no inline onclick, no quote issues
+  var items = container.querySelectorAll('.nt-jo-item');
+  items.forEach(function(el) {
+    var idx = parseInt(el.getAttribute('data-idx'));
+    el.style.cssText = 'padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .12s;';
+    el.addEventListener('mouseenter', function() { this.style.background = 'var(--amber-bg)'; });
+    el.addEventListener('mouseleave', function() { this.style.background = 'transparent'; });
+    el.addEventListener('mousedown',  function(e) {
+      e.preventDefault(); // prevent input blur before click fires
+      nt_selectJO(slice[idx].joNumber, slice[idx].jobDesc);
+    });
+  });
+
+  if (nt_joFiltered.length > 80) {
+    var more = document.createElement('div');
+    more.style.cssText = 'padding:8px 14px;font-size:11px;color:var(--text3);text-align:center;';
+    more.textContent = '+ ' + (nt_joFiltered.length - 80) + ' more — refine your search';
+    container.appendChild(more);
+  }
+}
+
+function nt_selectJO(joNumber, jobDesc) {
+  // Store the JO number in hidden field
+  document.getElementById('nt-related-jo').value = joNumber;
+  // Show search box with the full display text
+  document.getElementById('nt-jo-search').value  = joNumber + (jobDesc ? ' — ' + jobDesc : '');
+  // Show selected badge
+  var badge = document.getElementById('nt-jo-selected-badge');
+  badge.style.display = 'block';
+  badge.textContent   = joNumber;
+  nt_hideJODropdown();
+}
+
+function nt_showJODropdown() {
+  nt_renderJOList();
+  document.getElementById('nt-jo-dropdown').style.display = 'block';
+}
+
+function nt_hideJODropdown() {
+  document.getElementById('nt-jo-dropdown').style.display = 'none';
 }
 
 function nt_populateVehicles() {
@@ -152,6 +269,10 @@ function nt_reset() {
   });
   document.getElementById('nt-trip-type').value  = '';
   document.getElementById('nt-vehicle-id').value = '';
+  // Clear JO search display
+  document.getElementById('nt-jo-search').value          = '';
+  document.getElementById('nt-jo-selected-badge').style.display = 'none';
+  nt_hideJODropdown();
 }
 
 function nt_saveTrip(status) {
