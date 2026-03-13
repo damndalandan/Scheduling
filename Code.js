@@ -309,52 +309,54 @@ function ops_getSettings_() {
 // ============================================================
 //  JO DATABASE — fetch from external linked spreadsheet
 // ============================================================
+// ============================================================
+//  DATABASE LINK HELPER — extracts Spreadsheet ID from DatabaseLink sheet
+// ============================================================
+function ops_getDBId_(label) {
+  const ss        = SpreadsheetApp.getActiveSpreadsheet();
+  const linkSheet = ss.getSheetByName('DatabaseLink');
+  if (!linkSheet) throw new Error("Sheet 'DatabaseLink' not found.");
+  const lastRow = linkSheet.getLastRow();
+  if (lastRow < 2) throw new Error("'DatabaseLink' sheet is empty.");
+  const labels = linkSheet.getRange(2, 1, lastRow - 1, 1).getValues().flat();
+  const urls   = linkSheet.getRange(2, 2, lastRow - 1, 1).getValues().flat();
+  const idx    = labels.indexOf(label);
+  if (idx === -1) throw new Error('Label "' + label + '" not found in DatabaseLink sheet.');
+  const url = urls[idx];
+  if (!url || url.toString().trim() === '') throw new Error('URL for "' + label + '" is empty.');
+  const match = url.toString().match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+  if (!match || !match[1]) throw new Error('Could not extract Spreadsheet ID from URL for "' + label + '".');
+  return match[1];
+}
+
 function ops_getJOList() {
   try {
-    // 1. Read the JODatabase URL from DatabaseLink sheet
-    const ss     = SpreadsheetApp.getActiveSpreadsheet();
-    const linkSh = ss.getSheetByName('DatabaseLink');
-    if (!linkSh) return { success: false, message: 'DatabaseLink sheet not found.' };
-
-    const linkLr = linkSh.getLastRow();
-    if (linkLr < 2) return { success: false, message: 'DatabaseLink sheet is empty.' };
-
-    // Read cols A and B — Name | Link
-    const linkData = linkSh.getRange(2, 1, linkLr - 1, 2).getValues();
-
-    let joUrl = '';
-    for (let i = 0; i < linkData.length; i++) {
-      const name = String(linkData[i][0] || '').trim().toLowerCase().replace(/\s/g, '');
-      const link = String(linkData[i][1] || '').trim();
-      // Match 'jodatabase' with or without spaces/caps
-      if (name === 'jodatabase' && link) { joUrl = link; break; }
+    // 1. Get JODatabase spreadsheet ID from DatabaseLink sheet
+    let joDbId;
+    try {
+      joDbId = ops_getDBId_('JODatabase');
+    } catch(e) {
+      return { success: false, message: 'DatabaseLink error: ' + e.message };
     }
-    if (!joUrl) return { success: false, message: 'JODatabase URL not found in DatabaseLink. Found rows: ' + JSON.stringify(linkData.map(function(r){ return r[0]; })) };
 
-    // 2. Strip #gid=... fragment — openByUrl() doesn't need it
-    joUrl = joUrl.split('#')[0].trim();
-
-    // 3. Open external spreadsheet
+    // 2. Open external spreadsheet by ID — more reliable than openByUrl
     let extSS;
     try {
-      extSS = SpreadsheetApp.openByUrl(joUrl);
+      extSS = SpreadsheetApp.openById(joDbId);
     } catch(e) {
-      return { success: false, message: 'Cannot open JODatabase. Make sure it is shared with this Google account. Error: ' + e.message };
+      return { success: false, message: 'Cannot open JODatabase (ID: ' + joDbId + '). Check sharing permissions: ' + e.message };
     }
 
-    // 4. Get Line-up JOs sheet — try exact name and common variants
-    let joSh = extSS.getSheetByName('Line-up JOs');
-    if (!joSh) joSh = extSS.getSheetByName('Lineup JOs');
-    if (!joSh) joSh = extSS.getSheetByName('Line up JOs');
+    // 3. Get Line-up JOs sheet
+    const joSh = extSS.getSheetByName('Line-up JOs');
     if (!joSh) {
-      // List all sheets to help debug
-      const shNames = extSS.getSheets().map(function(s){ return s.getName(); });
-      return { success: false, message: 'Sheet "Line-up JOs" not found. Available sheets: ' + shNames.join(', ') };
+      const shNames = extSS.getSheets().map(function(s) { return s.getName(); });
+      return { success: false, message: '"Line-up JOs" not found. Available sheets: ' + shNames.join(', ') };
     }
 
-    // 5. Read Column I (index 8) = Job Description, Column L (index 11) = JO Number
+    // 4. Read Column I (index 8) = Job Description, Column L (index 11) = JO Number
     const lr = joSh.getLastRow();
-    if (lr < 2) return { success: true, data: [], message: 'Line-up JOs sheet has no data rows.' };
+    if (lr < 2) return { success: true, data: [] };
 
     const data = joSh.getRange(2, 1, lr - 1, 12).getValues(); // cols A–L
 
