@@ -202,9 +202,15 @@ function nt_saveTrip(status) {
       if (r.success) {
         o_toast('success', r.message);
         nt_reset();
-        // Reset trips tab so it reloads fresh
-        initializedTabs['trips'] = false;
-        initializedTabs['approval'] = false;
+        // Force reload on all affected tabs
+        initializedTabs['trips']      = false;
+        initializedTabs['approval']   = false;
+        initializedTabs['dashboard']  = false;
+        // If user is already on trips tab, reload it now
+        var tripsPane = document.getElementById('tab-trips');
+        if (tripsPane && tripsPane.classList.contains('active')) {
+          init_trips();
+        }
       } else { o_toast('error', r.message); }
     })
     .withFailureHandler(function(e) {

@@ -24,7 +24,7 @@
 
   <!-- Filter chips -->
   <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;">
-    <button class="o-chip active" onclick="trp_setStatus('',this)">All</button>
+    <button class="o-chip active" id="trp-chip-all" onclick="trp_setStatus('',this)">All</button>
     <button class="o-chip" onclick="trp_setStatus('Draft',this)">Draft</button>
     <button class="o-chip" onclick="trp_setStatus('Submitted',this)">Submitted</button>
     <button class="o-chip" onclick="trp_setStatus('Approved',this)">Approved</button>
@@ -109,6 +109,11 @@ var trp_all = [], trp_filtered = [], trp_statusFilter = '', trp_cancelId = null;
 var trp_page = 1, trp_pageSize = 15;
 
 function init_trips() {
+  // Always reset to All filter on fresh load
+  trp_statusFilter = '';
+  document.querySelectorAll('#tab-trips .o-chip').forEach(function(c) { c.classList.remove('active'); });
+  var allChip = document.getElementById('trp-chip-all');
+  if (allChip) allChip.classList.add('active');
   trp_showSkeleton();
   google.script.run
     .withSuccessHandler(function(r) {
