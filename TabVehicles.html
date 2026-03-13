@@ -51,7 +51,7 @@
 
 </div>
 
-<!-- Vehicle Modal -->
+<!-- Add / Edit Modal -->
 <div class="o-modal-overlay" id="veh-modal">
   <div class="o-modal">
     <div class="o-modal-header">
@@ -115,8 +115,35 @@
   </div>
 </div>
 
+<!-- Delete Confirm Modal -->
+<div class="o-modal-overlay" id="veh-delete-modal">
+  <div class="o-modal o-modal-sm">
+    <div class="o-modal-header">
+      <div class="o-modal-title" style="color:var(--red);">🗑️ Delete Vehicle</div>
+      <button class="o-modal-close" onclick="veh_closeDeleteModal()">✕</button>
+    </div>
+    <div class="o-modal-body">
+      <div class="o-alert o-alert-error" style="margin-bottom:16px;">
+        ⚠️ Permanente nga mapapala ang record. Dili na ma-undo.
+      </div>
+      <div id="veh-delete-info" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:12px 14px;margin-bottom:4px;">
+      </div>
+      <p style="font-size:12px;color:var(--text3);margin-top:10px;">
+        Type <strong style="color:var(--text);font-family:'DM Mono',monospace;">DELETE</strong> below to confirm.
+      </p>
+      <input id="veh-delete-confirm-input" class="o-input" placeholder="Type DELETE here" oninput="veh_checkDeleteInput()" style="margin-top:8px;">
+    </div>
+    <div class="o-modal-footer">
+      <button class="o-btn o-btn-ghost" onclick="veh_closeDeleteModal()">Cancel</button>
+      <button id="veh-delete-confirm-btn" class="o-btn o-btn-danger" onclick="veh_confirmDelete()" disabled style="opacity:.4;cursor:not-allowed;">
+        🗑️ Delete Permanently
+      </button>
+    </div>
+  </div>
+</div>
+
 <script>
-var veh_all = [], veh_filtered = [], veh_editId = null;
+var veh_all = [], veh_filtered = [], veh_editId = null, veh_deleteId = null;
 var veh_page = 1, veh_pageSize = 15;
 
 function init_vehicles() {
@@ -140,7 +167,7 @@ function veh_reload() {
 }
 
 function veh_showSkeleton() {
-  document.getElementById('veh-tbody').innerHTML = o_skelRows(7, 5);
+  document.getElementById('veh-tbody').innerHTML = o_skelRows(8, 5);
 }
 
 function veh_apply() {
@@ -182,21 +209,32 @@ function veh_renderPage() {
       + '<td>' + o_vehBadge(v.status) + '</td>'
       + '<td style="font-size:12px;">' + o_esc(v.insExpiry || '—') + ' ' + o_alertBadge(insD) + '</td>'
       + '<td style="font-size:12px;">' + o_esc(v.ltoExpiry || '—') + ' ' + o_alertBadge(ltoD) + '</td>'
-      + '<td><div class="td-actions"><button class="o-btn o-btn-ghost o-btn-sm" onclick="veh_openModal(\'' + o_esc(v.vehicleId) + '\')">✏️ Edit</button></div></td>'
+      + '<td>'
+      +   '<div class="td-actions">'
+      +     '<button class="o-btn o-btn-ghost o-btn-sm" onclick="veh_openModal(\'' + o_esc(v.vehicleId) + '\')">✏️ Edit</button>'
+      +     '<button class="o-btn o-btn-danger o-btn-sm" onclick="veh_openDeleteModal(\'' + o_esc(v.vehicleId) + '\')">🗑️ Delete</button>'
+      +   '</div>'
+      + '</td>'
       + '</tr>';
   }).join('');
 }
 
 function veh_daysLeft(d) {
   if (!d) return null;
-  return Math.ceil((new Date(d) - new Date()) / 86400000);
+  var parts = String(d).split('-');
+  if (parts.length !== 3) return null;
+  var expiry = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+  var today  = new Date(); today.setHours(0,0,0,0);
+  return Math.ceil((expiry - today) / 86400000);
 }
 
+// ── Add / Edit Modal ──
 function veh_openModal(id) {
   veh_editId = id || null;
   document.getElementById('veh-modal-title').textContent = id ? 'Edit Vehicle' : 'Add Vehicle';
-  var fields = ['veh-plate','veh-type','veh-brand','veh-mileage','veh-ins-expiry','veh-ins-link','veh-lto-expiry','veh-lto-link','veh-notes'];
+  var fields = ['veh-plate','veh-brand','veh-mileage','veh-ins-expiry','veh-ins-link','veh-lto-expiry','veh-lto-link','veh-notes'];
   fields.forEach(function(f) { document.getElementById(f).value = ''; });
+  document.getElementById('veh-type').value   = '';
   document.getElementById('veh-status').value = 'Active';
   if (id) {
     var v = veh_all.find(function(x) { return x.vehicleId === id; });
@@ -247,9 +285,70 @@ function veh_save() {
         o_toast('success', r.message);
         veh_closeModal();
         veh_reload();
+        initializedTabs['renewals'] = false;
       } else { o_toast('error', r.message); }
     })
     .withFailureHandler(function(e) { btn.disabled = false; btn.textContent = 'Save Vehicle'; o_toast('error', e.message); })
     [fn](payload);
+}
+
+// ── Delete Modal ──
+function veh_openDeleteModal(id) {
+  veh_deleteId = id;
+  var v = veh_all.find(function(x) { return x.vehicleId === id; });
+  document.getElementById('veh-delete-confirm-input').value = '';
+  document.getElementById('veh-delete-confirm-btn').disabled = true;
+  document.getElementById('veh-delete-confirm-btn').style.opacity = '.4';
+  document.getElementById('veh-delete-confirm-btn').style.cursor  = 'not-allowed';
+  document.getElementById('veh-delete-info').innerHTML = v
+    ? '<div style="font-size:13px;line-height:1.8;">'
+      + '<span style="color:var(--text3);font-size:11px;text-transform:uppercase;letter-spacing:1px;">Vehicle ID</span><br>'
+      + '<strong class="mono">' + o_esc(v.vehicleId) + '</strong>'
+      + '&nbsp;&nbsp;·&nbsp;&nbsp;<strong>' + o_esc(v.plate) + '</strong>'
+      + '&nbsp;&nbsp;·&nbsp;&nbsp;' + o_esc(v.type)
+      + (v.brand ? '&nbsp;&nbsp;·&nbsp;&nbsp;' + o_esc(v.brand) : '')
+      + '<br>' + o_vehBadge(v.status)
+      + '</div>'
+    : id;
+  document.getElementById('veh-delete-modal').classList.add('open');
+}
+
+function veh_closeDeleteModal() {
+  document.getElementById('veh-delete-modal').classList.remove('open');
+  veh_deleteId = null;
+}
+
+function veh_checkDeleteInput() {
+  var val = document.getElementById('veh-delete-confirm-input').value.trim();
+  var btn = document.getElementById('veh-delete-confirm-btn');
+  var ok  = val === 'DELETE';
+  btn.disabled       = !ok;
+  btn.style.opacity  = ok ? '1'            : '.4';
+  btn.style.cursor   = ok ? 'pointer'      : 'not-allowed';
+}
+
+function veh_confirmDelete() {
+  if (!veh_deleteId) return;
+  var val = document.getElementById('veh-delete-confirm-input').value.trim();
+  if (val !== 'DELETE') { o_toast('error', 'Type DELETE to confirm.'); return; }
+
+  var btn = document.getElementById('veh-delete-confirm-btn');
+  btn.disabled = true; btn.textContent = 'Deleting…';
+
+  google.script.run
+    .withSuccessHandler(function(r) {
+      btn.disabled = false; btn.textContent = '🗑️ Delete Permanently';
+      if (r.success) {
+        o_toast('success', r.message);
+        veh_closeDeleteModal();
+        veh_reload();
+        initializedTabs['renewals'] = false;
+      } else { o_toast('error', r.message); }
+    })
+    .withFailureHandler(function(e) {
+      btn.disabled = false; btn.textContent = '🗑️ Delete Permanently';
+      o_toast('error', e.message);
+    })
+    .ops_deleteVehicle(veh_deleteId);
 }
 </script>

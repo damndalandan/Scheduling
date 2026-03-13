@@ -176,9 +176,18 @@ function ops_sh_(name) {
 function ops_fmtDate_(val) {
   if (!val) return '';
   try {
-    const d = (val instanceof Date) ? val : new Date(val);
+    var s = String(val).trim();
+    if (!s || s === '0' || s === '') return '';
+
+    // Already YYYY-MM-DD string — return as-is (from HTML date input)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+
+    // GAS Date object — use local getters to avoid UTC shift
+    var d = (val instanceof Date) ? val : new Date(s);
     if (isNaN(d.getTime())) return '';
-    return d.getFullYear() + '-'
+    var year = d.getFullYear();
+    if (year < 1900 || year > 2200) return '';
+    return year + '-'
       + String(d.getMonth() + 1).padStart(2, '0') + '-'
       + String(d.getDate()).padStart(2, '0');
   } catch(e) { return ''; }
@@ -198,11 +207,31 @@ function ops_fmtDT_(val) {
 }
 
 function ops_daysLeft_(dateStr) {
-  if (!dateStr) return null;
+  if (!dateStr || dateStr === '') return null;
   try {
-    const diff = Math.ceil((new Date(dateStr) - new Date()) / 86400000);
-    return diff;
+    // dateStr is YYYY-MM-DD from ops_fmtDate_
+    var parts = String(dateStr).split('-');
+    if (parts.length !== 3) return null;
+    var expiry = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    var today  = new Date();
+    today.setHours(0, 0, 0, 0);
+    return Math.ceil((expiry - today) / 86400000);
   } catch(e) { return null; }
+}
+
+// DEBUG HELPER — run this in GAS editor to check raw sheet values
+function ops_debugVehicles() {
+  var sh = ops_sh_(OPS_SHEETS.VEHICLES);
+  var lr = sh.getLastRow();
+  if (lr < 2) { Logger.log("No data"); return; }
+  var data = sh.getRange(2, 1, lr - 1, 13).getValues();
+  data.forEach(function(r) {
+    Logger.log(JSON.stringify({
+      id: r[0], plate: r[1],
+      insRaw: String(r[6]), insType: typeof r[6], insFmt: ops_fmtDate_(r[6]),
+      ltoRaw: String(r[8]), ltoType: typeof r[8], ltoFmt: ops_fmtDate_(r[8])
+    }));
+  });
 }
 
 // ============================================================
@@ -471,6 +500,30 @@ function ops_updateVehicle(payload) {
   } catch(e) { return { success: false, message: e.message }; }
 }
 
+function ops_deleteVehicle(vehicleId) {
+  try {
+    const user = ops_getUserInfo_();
+    if (!ops_isAdmin_(user.role))
+      return { success: false, message: 'Admin access required to delete vehicles.' };
+    if (!vehicleId) return { success: false, message: 'Vehicle ID required.' };
+
+    const sh = ops_sh_(OPS_SHEETS.VEHICLES);
+    const lr = sh.getLastRow();
+    if (lr < 2) return { success: false, message: 'No vehicles found.' };
+
+    const data = sh.getRange(2, 1, lr - 1, 1).getValues();
+    let rowIdx = -1;
+    for (let i = 0; i < data.length; i++) {
+      if (String(data[i][0]).trim() === vehicleId) { rowIdx = i + 2; break; }
+    }
+    if (rowIdx === -1) return { success: false, message: 'Vehicle ' + vehicleId + ' not found.' };
+
+    sh.deleteRow(rowIdx);
+    ops_audit_('OPS_DELETE_VEHICLE', { vehicleId, by: user.email });
+    return { success: true, message: 'Vehicle ' + vehicleId + ' permanently deleted.' };
+  } catch(e) { return { success: false, message: e.message }; }
+}
+
 // ============================================================
 //  TRIPS — CRUD
 // ============================================================
@@ -698,26 +751,41 @@ function ops_getTripRow_(tripId) {
 function ops_buildRenewalAlerts_(vehicles, alertDays) {
   const rows = [];
   vehicles.forEach(function(v) {
-    if (v.insExpiry) {
-      const days = ops_daysLeft_(v.insExpiry);
-      rows.push({
-        vehicleId: v.vehicleId, plate: v.plate,
-        docType: 'Insurance', expiry: v.insExpiry,
-        daysLeft: days,
-        alertStatus: days === null ? 'No Date' : days < 0 ? 'Expired' : days <= alertDays ? 'Due in ' + days + ' days' : 'OK'
-      });
-    }
-    if (v.ltoExpiry) {
-      const days = ops_daysLeft_(v.ltoExpiry);
-      rows.push({
-        vehicleId: v.vehicleId, plate: v.plate,
-        docType: 'LTO', expiry: v.ltoExpiry,
-        daysLeft: days,
-        alertStatus: days === null ? 'No Date' : days < 0 ? 'Expired' : days <= alertDays ? 'Due in ' + days + ' days' : 'OK'
-      });
-    }
+    // Always add Insurance row — even if no expiry date set
+    var insDays = v.insExpiry ? ops_daysLeft_(v.insExpiry) : null;
+    rows.push({
+      vehicleId  : v.vehicleId,
+      plate      : v.plate,
+      docType    : 'Insurance',
+      expiry     : v.insExpiry || '—',
+      daysLeft   : insDays,
+      alertStatus: !v.insExpiry      ? 'No Date'
+                 : insDays === null  ? 'No Date'
+                 : insDays < 0      ? 'Expired'
+                 : insDays <= alertDays ? 'Due in ' + insDays + ' days'
+                 : 'OK'
+    });
+    // Always add LTO row
+    var ltoDays = v.ltoExpiry ? ops_daysLeft_(v.ltoExpiry) : null;
+    rows.push({
+      vehicleId  : v.vehicleId,
+      plate      : v.plate,
+      docType    : 'LTO',
+      expiry     : v.ltoExpiry || '—',
+      daysLeft   : ltoDays,
+      alertStatus: !v.ltoExpiry      ? 'No Date'
+                 : ltoDays === null  ? 'No Date'
+                 : ltoDays < 0      ? 'Expired'
+                 : ltoDays <= alertDays ? 'Due in ' + ltoDays + ' days'
+                 : 'OK'
+    });
   });
-  rows.sort(function(a, b) { return (a.daysLeft === null ? 9999 : a.daysLeft) - (b.daysLeft === null ? 9999 : b.daysLeft); });
+  // Sort: Expired first, then Due Soon, then OK, then No Date
+  rows.sort(function(a, b) {
+    var sa = a.daysLeft === null ? 9999 : a.daysLeft;
+    var sb = b.daysLeft === null ? 9999 : b.daysLeft;
+    return sa - sb;
+  });
   return rows;
 }
 
