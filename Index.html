@@ -434,10 +434,6 @@ textarea.o-input { resize: vertical; min-height: 72px; }
 
 <!-- ═══ MAIN CONTENT ═══ -->
 <main id="o-main">
-
-  <!-- ✅ BINAGO: Dinagdag ang TabLogin para lumabas ang login screen bago ang dashboard -->
-  <?!= include('TabLogin') ?>
-
   <div id="tab-dashboard"  class="tab-pane active"><?!= include('TabDashboard') ?></div>
   <div id="tab-vehicles"   class="tab-pane"><?!= include('TabVehicles') ?></div>
   <div id="tab-renewals"   class="tab-pane"><?!= include('TabRenewals') ?></div>
@@ -599,8 +595,22 @@ function o_reloadTab(tabName) {
   switchTab(tabName);
 }
 
-
-
+// ── Load user info on boot ──
+google.script.run
+  .withSuccessHandler(function(u) {
+    document.getElementById('o-user-email').textContent  = u.email || '';
+    document.getElementById('o-user-avatar').textContent = (u.email || 'U').charAt(0).toUpperCase();
+    document.getElementById('o-role-badge').textContent  = u.role  || 'No Role';
+    // Boot into dashboard
+    switchTab('dashboard');
+    init_dashboard();
+  })
+  .withFailureHandler(function() {
+    document.getElementById('o-role-badge').textContent = 'No Role';
+    switchTab('dashboard');
+    init_dashboard();
+  })
+  .ops_getUserInfoPublic();
 </script>
 
 </body>
