@@ -211,7 +211,13 @@ textarea.o-input{resize:vertical;min-height:72px;}
       <span class="sb-label">Reports</span>
     </div>
 
-    <!-- ✅ BINAGO: Sign Out button added at bottom of sidebar -->
+    <!-- ✅ DRIVER: My Schedule nav item — visible only for driver role -->
+    <div class="o-nav-item" data-tab="driver-dashboard" style="display:none;">
+      <svg width="17" height="17" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+      <span class="sb-label">My Schedule</span>
+    </div>
+
+    <!-- ✅ DRIVER: Sign Out shown for driver too -->
     <div class="o-nav-divider" style="margin-top:10px;"></div>
     <div class="o-nav-item logout" onclick="o_logout()">
       <svg width="17" height="17" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
@@ -239,6 +245,8 @@ textarea.o-input{resize:vertical;min-height:72px;}
   <div id="tab-approval"   class="tab-pane"><?!= include('TabApproval') ?></div>
   <div id="tab-completion" class="tab-pane"><?!= include('TabCompletion') ?></div>
   <div id="tab-reports"    class="tab-pane"><?!= include('TabReports') ?></div>
+  <!-- ✅ DRIVER: Dedicated driver dashboard tab -->
+  <div id="tab-driver-dashboard" class="tab-pane"><?!= include('TabDriverDashboard') ?></div>
 </main>
 
 <!-- ═══ GLOBAL TOAST ═══ -->
@@ -372,41 +380,28 @@ function o_applyRoleUI(role) {
   var isDriver = role.toLowerCase() === 'driver';
 
   // Nav items to hide for driver (data-tab values)
-  var driverHidden = ['vehicles', 'renewals', 'new-trip', 'approval', 'completion', 'reports'];
+  var driverHidden = ['dashboard','vehicles', 'renewals', 'trips', 'new-trip', 'approval', 'completion', 'reports'];
 
   driverHidden.forEach(function(tab) {
     var navEl = document.querySelector('.o-nav-item[data-tab="' + tab + '"]');
     if (navEl) navEl.style.display = isDriver ? 'none' : '';
   });
 
-  // Also hide the nav section labels if driver
-  // Hide "Vehicles" section label and divider
-  var allSections = document.querySelectorAll('.o-nav-section, .o-nav-divider');
+  // Show/hide driver nav item
+  var driverNavEl = document.querySelector('.o-nav-item[data-tab="driver-dashboard"]');
+  if (driverNavEl) driverNavEl.style.display = isDriver ? '' : 'none';
+
+  // Hide all section labels & dividers for driver (except driver's own)
   if (isDriver) {
-    // Hide everything except Overview section and its divider
-    // We do this by hiding all sections/dividers after the first nav item
-    var navList = document.querySelector('#o-sidebar > div[style*="flex:1"]');
-    if (navList) {
-      var children = navList.children;
-      var dashboardFound = false;
-      for (var i = 0; i < children.length; i++) {
-        var el = children[i];
-        var isOverviewSection = el.classList.contains('o-nav-section') && el.textContent.trim() === 'Overview';
-        var isDashboardItem   = el.classList.contains('o-nav-item') && el.getAttribute('data-tab') === 'dashboard';
-        if (isOverviewSection || isDashboardItem) {
-          el.style.display = '';
-        } else if (!el.classList.contains('o-nav-item')) {
-          // sections, dividers — hide them for driver
-          el.style.display = 'none';
-        }
-      }
-    }
+    document.querySelectorAll('#o-sidebar .o-nav-section, #o-sidebar .o-nav-divider').forEach(function(el) {
+      el.style.display = 'none';
+    });
   }
 
-  // If driver, boot into trips tab (showing only their assigned trips)
+  // Boot into the right tab
   if (isDriver) {
-    switchTab('trips');
-    init_trips();
+    switchTab('driver-dashboard');
+    init_driver_dashboard();
   } else {
     switchTab('dashboard');
     init_dashboard();
@@ -420,6 +415,9 @@ function o_logout() {
   // Restore all hidden nav items (in case driver was logged in)
   document.querySelectorAll('#o-sidebar .o-nav-item, #o-sidebar .o-nav-section, #o-sidebar .o-nav-divider')
     .forEach(function(el) { el.style.display = ''; });
+  // Re-hide driver-only nav item
+  var driverNav = document.querySelector('.o-nav-item[data-tab="driver-dashboard"]');
+  if (driverNav) driverNav.style.display = 'none';
 
   // Clear navbar user info
   document.getElementById('o-user-email').textContent  = '';

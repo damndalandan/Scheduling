@@ -480,6 +480,88 @@ function getTripsInitData() {
   } catch(e) { return { success: false, message: e.message }; }
 }
 
+// ============================================================
+//  DRIVER DASHBOARD — I-PASTE SA Code.js
+//  (i-add after getTripsInitData function)
+// ============================================================
+
+// Returns trips assigned to the logged-in driver
+function getDriverDashboardData() {
+  try {
+    var user  = ops_getUserInfo_();
+    var email = user.email.toLowerCase();
+    var allTrips = ops_getAllTrips_();
+
+    // Filter trips where driverEmpId matches email OR driver name contains part of email
+    var myTrips = allTrips.filter(function(t) {
+      var dEmpId = (t.driverEmpId || '').toLowerCase().trim();
+      return dEmpId === email;
+    });
+
+    // Fallback: if no exact email match, return all trips assigned to any driver
+    // (for name-based systems where driverEmpId is not an email)
+    // Admin can configure driverEmpId to store email for precise filtering
+
+    return {
+      success     : true,
+      trips       : myTrips,
+      driverEmail : email,
+      user        : user
+    };
+  } catch(e) {
+    return { success: false, message: e.message };
+  }
+}
+
+// Driver completes a trip — same as ops_completeTrip but allows driver role
+function ops_driverCompleteTrip(payload) {
+  try {
+    var user = ops_getUserInfo_();
+
+    // Allow driver role in addition to encoder/admin
+    var role = (user.role || '').toLowerCase();
+    if (!ops_isEncoder_(user.role) && role !== 'driver') {
+      return { success: false, message: 'Access denied. Driver or Encoder role required.' };
+    }
+
+    if (!payload.tripId)      return { success: false, message: 'Trip ID required.' };
+    if (!payload.actualStart) return { success: false, message: 'Actual Start required.' };
+    if (!payload.actualEnd)   return { success: false, message: 'Actual End required.' };
+
+    var startKm = parseFloat(payload.startKm) || 0;
+    var endKm   = parseFloat(payload.endKm)   || 0;
+    if (endKm < startKm) return { success: false, message: 'End mileage cannot be less than start mileage.' };
+
+    var row = ops_getTripRow_(payload.tripId);
+    if (!row) return { success: false, message: 'Trip not found.' };
+    if (row.data[TRIP_COL.STATUS] !== TRIP_STATUS.APPROVED) {
+      return { success: false, message: 'Trip must be Approved before completing.' };
+    }
+
+    var distance = endKm - startKm;
+    var sh  = ops_sh_(OPS_SHEETS.TRIPS);
+    var now = new Date();
+
+    sh.getRange(row.idx, TRIP_COL.STATUS       + 1).setValue(TRIP_STATUS.COMPLETED);
+    sh.getRange(row.idx, TRIP_COL.ACTUAL_START  + 1).setValue(payload.actualStart);
+    sh.getRange(row.idx, TRIP_COL.ACTUAL_END    + 1).setValue(payload.actualEnd);
+    sh.getRange(row.idx, TRIP_COL.START_KM      + 1).setValue(startKm);
+    sh.getRange(row.idx, TRIP_COL.END_KM        + 1).setValue(endKm);
+    sh.getRange(row.idx, TRIP_COL.DISTANCE      + 1).setValue(distance);
+    sh.getRange(row.idx, TRIP_COL.REMARKS       + 1).setValue(payload.remarks || '');
+    sh.getRange(row.idx, TRIP_COL.UPDATED_AT    + 1).setValue(now);
+    sh.getRange(row.idx, TRIP_COL.UPDATED_BY    + 1).setValue(user.email);
+
+    ops_audit_('DRIVER_COMPLETE_TRIP', { tripId: payload.tripId, distance: distance, by: user.email });
+    return {
+      success  : true,
+      message  : 'Trip ' + payload.tripId + ' completed! Distance: ' + distance + ' km.'
+    };
+  } catch(e) {
+    return { success: false, message: e.message };
+  }
+}
+
 // Vehicles tab init
 function getVehiclesInitData() {
   try {

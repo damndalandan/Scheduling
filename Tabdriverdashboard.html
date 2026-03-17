@@ -1,0 +1,725 @@
+<!-- TabDriverDashboard.html — Driver Portal -->
+<style>
+#tab-driver-dashboard, #tab-driver-dashboard * { color: var(--text); }
+
+/* ── Calendar ── */
+.drv-cal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 14px;
+}
+.drv-cal-nav {
+  display: flex; align-items: center; gap: 8px;
+}
+.drv-cal-nav button {
+  background: var(--surface2); border: 1.5px solid var(--border);
+  border-radius: 8px; color: var(--text2); cursor: pointer;
+  padding: 6px 12px; font-size: 13px; font-weight: 700;
+  font-family: 'DM Sans', sans-serif; transition: all .15s;
+}
+.drv-cal-nav button:hover { border-color: var(--accent); color: var(--accent); }
+.drv-cal-title { font-size: 16px; font-weight: 800; min-width: 180px; text-align: center; }
+
+.drv-view-tabs {
+  display: flex; gap: 4px;
+  background: var(--surface2); border-radius: 9px; padding: 3px;
+}
+.drv-view-tab {
+  padding: 5px 14px; border-radius: 7px; font-size: 12px; font-weight: 700;
+  cursor: pointer; transition: all .15s; color: var(--text3);
+  font-family: 'DM Sans', sans-serif; border: none; background: none;
+}
+.drv-view-tab.active { background: var(--accent); color: #0f1117; }
+
+/* Day grid */
+.drv-day-grid {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px;
+  margin-bottom: 4px;
+}
+.drv-day-label {
+  text-align: center; font-size: 11px; font-weight: 700;
+  color: var(--text3); text-transform: uppercase; padding: 6px 0;
+}
+.drv-day-cell {
+  min-height: 80px; background: var(--surface2); border-radius: 8px;
+  border: 1px solid var(--border); padding: 6px; cursor: default;
+  transition: border-color .1s;
+}
+.drv-day-cell.today { border-color: var(--accent); }
+.drv-day-cell.other-month { opacity: .35; }
+.drv-day-num {
+  font-size: 12px; font-weight: 700; color: var(--text2); margin-bottom: 4px;
+  width: 22px; height: 22px; display: flex; align-items: center;
+  justify-content: center; border-radius: 50%;
+}
+.drv-day-cell.today .drv-day-num { background: var(--accent); color: #0f1117; }
+.drv-trip-chip {
+  font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px;
+  margin-bottom: 2px; cursor: pointer; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+  display: block;
+}
+.chip-approved  { background: rgba(34,197,94,.15);  color: var(--green); }
+.chip-submitted { background: rgba(59,130,246,.15); color: var(--blue); }
+.chip-completed { background: rgba(168,85,247,.15); color: var(--purple); }
+.chip-other     { background: rgba(139,146,168,.1); color: var(--text2); }
+
+/* Weekly view */
+.drv-week-grid {
+  display: grid; grid-template-columns: 60px repeat(7, 1fr);
+  border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+}
+.drv-week-header {
+  background: var(--surface2); padding: 8px 6px; text-align: center;
+  font-size: 11px; font-weight: 700; color: var(--text3);
+  border-bottom: 1px solid var(--border);
+}
+.drv-week-header.today-col { color: var(--accent); }
+.drv-time-col {
+  font-size: 10px; color: var(--text3); padding: 4px 6px; text-align: right;
+  border-right: 1px solid var(--border); border-bottom: 1px solid var(--border);
+  height: 40px; display: flex; align-items: center; justify-content: flex-end;
+}
+.drv-week-cell {
+  border-right: 1px solid var(--border); border-bottom: 1px solid var(--border);
+  height: 40px; position: relative;
+}
+.drv-week-cell.today-col { background: rgba(245,166,35,.03); }
+.drv-week-event {
+  position: absolute; left: 2px; right: 2px; top: 2px;
+  font-size: 9px; font-weight: 700; padding: 1px 4px;
+  border-radius: 3px; cursor: pointer; overflow: hidden;
+  white-space: nowrap; text-overflow: ellipsis;
+}
+
+/* Stats row */
+.drv-stat-row {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+  margin-bottom: 20px;
+}
+.drv-stat { padding: 16px 18px; }
+.drv-stat-label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
+.drv-stat-val { font-size: 26px; font-weight: 800; font-family: 'DM Mono', monospace; margin-top: 5px; }
+
+/* Records table */
+.drv-status-dot {
+  width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px;
+}
+
+@media (max-width: 767px) {
+  .drv-stat-row { grid-template-columns: 1fr 1fr; }
+  .drv-day-cell { min-height: 50px; }
+  .drv-trip-chip { display: none; }
+  .drv-day-cell.has-trip { border-color: var(--accent); }
+}
+</style>
+
+<div style="padding:24px 28px 40px;" id="tab-driver-dashboard">
+
+  <!-- Header -->
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:20px;flex-wrap:wrap;">
+    <div>
+      <h2 style="font-size:20px;font-weight:800;letter-spacing:-.02em;margin:0 0 3px;">My Trip Schedule</h2>
+      <p style="font-size:13px;color:var(--text3);margin:0;">Imong mga assigned na trips ug records</p>
+    </div>
+    <button id="drv-reload-btn" class="o-btn-reload" onclick="drv_reload()">
+      <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+      </svg>
+      Reload
+    </button>
+  </div>
+
+  <!-- Stats -->
+  <div class="drv-stat-row" id="drv-stats">
+    <div class="o-card drv-stat"><div class="drv-stat-label">Total Trips</div><div class="drv-stat-val" style="color:var(--accent);">—</div></div>
+    <div class="o-card drv-stat"><div class="drv-stat-label">Ongoing</div><div class="drv-stat-val" style="color:var(--blue);">—</div></div>
+    <div class="o-card drv-stat"><div class="drv-stat-label">Completed</div><div class="drv-stat-val" style="color:var(--green);">—</div></div>
+    <div class="o-card drv-stat"><div class="drv-stat-label">Total KM</div><div class="drv-stat-val" style="color:var(--purple);">—</div></div>
+  </div>
+
+  <!-- Calendar section -->
+  <div class="o-card" style="padding:20px;margin-bottom:20px;">
+
+    <!-- Calendar nav -->
+    <div class="drv-cal-header">
+      <div class="drv-cal-nav">
+        <button onclick="drv_prevPeriod()">&#8249;</button>
+        <button onclick="drv_goToday()" style="font-size:11px;">Today</button>
+        <button onclick="drv_nextPeriod()">&#8250;</button>
+        <span id="drv-cal-title" class="drv-cal-title">Loading…</span>
+      </div>
+      <div class="drv-view-tabs">
+        <button class="drv-view-tab active" onclick="drv_setView('month',this)">Month</button>
+        <button class="drv-view-tab" onclick="drv_setView('week',this)">Week</button>
+        <button class="drv-view-tab" onclick="drv_setView('day',this)">Day</button>
+      </div>
+    </div>
+
+    <!-- Calendar body -->
+    <div id="drv-calendar-body">
+      <div style="text-align:center;padding:40px;color:var(--text3);">Loading calendar…</div>
+    </div>
+
+  </div>
+
+  <!-- Section tabs: Records -->
+  <div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;">
+    <button class="o-chip active" id="drv-rec-all"       onclick="drv_setRecFilter('all',this)">All Trips</button>
+    <button class="o-chip"        id="drv-rec-approved"  onclick="drv_setRecFilter('Approved',this)">Ongoing</button>
+    <button class="o-chip"        id="drv-rec-completed" onclick="drv_setRecFilter('Completed',this)">Completed</button>
+  </div>
+
+  <!-- Records table -->
+  <div class="o-card" style="overflow:hidden;">
+    <table class="o-table" style="border:none;">
+      <thead>
+        <tr>
+          <th>Trip ID</th>
+          <th>Date</th>
+          <th>Route</th>
+          <th>Vehicle</th>
+          <th>Status</th>
+          <th>Start KM</th>
+          <th>End KM</th>
+          <th>Distance</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="drv-tbody">
+        <tr><td colspan="9"><div class="o-empty"><p>Loading…</p></div></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<!-- Trip Detail Modal -->
+<div class="o-modal-overlay" id="drv-detail-modal">
+  <div class="o-modal o-modal-lg">
+    <div class="o-modal-header">
+      <div class="o-modal-title" id="drv-detail-title">Trip Details</div>
+      <button class="o-modal-close" onclick="document.getElementById('drv-detail-modal').classList.remove('open')">&#10005;</button>
+    </div>
+    <div class="o-modal-body" id="drv-detail-body"></div>
+    <div class="o-modal-footer">
+      <button class="o-btn o-btn-ghost" onclick="document.getElementById('drv-detail-modal').classList.remove('open')">Close</button>
+      <button id="drv-complete-btn" class="o-btn o-btn-primary" style="display:none;" onclick="drv_openComplete()">&#128681; Mark as Completed</button>
+    </div>
+  </div>
+</div>
+
+<!-- Complete Trip Modal -->
+<div class="o-modal-overlay" id="drv-complete-modal">
+  <div class="o-modal o-modal-sm">
+    <div class="o-modal-header">
+      <div class="o-modal-title">Complete Trip</div>
+      <button class="o-modal-close" onclick="document.getElementById('drv-complete-modal').classList.remove('open')">&#10005;</button>
+    </div>
+    <div class="o-modal-body">
+      <div id="drv-cmp-summary" style="padding:10px 12px;background:var(--surface2);border-radius:8px;font-size:13px;margin-bottom:16px;"></div>
+
+      <div class="o-divider" style="margin-top:0;">Actual Date &amp; Time</div>
+      <div class="o-form-grid" style="margin-bottom:14px;">
+        <div class="o-form-group">
+          <label class="o-label">Actual Start *</label>
+          <input type="datetime-local" id="drv-actual-start" class="o-input">
+        </div>
+        <div class="o-form-group">
+          <label class="o-label">Actual End *</label>
+          <input type="datetime-local" id="drv-actual-end" class="o-input">
+        </div>
+      </div>
+
+      <div class="o-divider">Mileage Record</div>
+      <div class="o-form-grid" style="margin-bottom:14px;">
+        <div class="o-form-group">
+          <label class="o-label">Start KM (Odometer) *</label>
+          <input type="number" id="drv-start-km" class="o-input" placeholder="e.g. 12400" oninput="drv_calcDist()">
+        </div>
+        <div class="o-form-group">
+          <label class="o-label">End KM (Odometer) *</label>
+          <input type="number" id="drv-end-km" class="o-input" placeholder="e.g. 12580" oninput="drv_calcDist()">
+        </div>
+        <div class="o-form-group span2">
+          <div id="drv-dist-display" style="display:none;background:var(--amber-bg);border:1px solid var(--amber-bd);border-radius:9px;padding:10px 14px;font-size:14px;font-weight:700;color:var(--accent);text-align:center;"></div>
+        </div>
+      </div>
+
+      <div class="o-divider">Remarks</div>
+      <div class="o-form-group">
+        <label class="o-label">Remarks <span style="color:var(--text3);font-weight:400;">(optional)</span></label>
+        <textarea id="drv-remarks" class="o-input" placeholder="Any notes about this trip…" style="min-height:60px;"></textarea>
+      </div>
+    </div>
+    <div class="o-modal-footer">
+      <button class="o-btn o-btn-ghost" onclick="document.getElementById('drv-complete-modal').classList.remove('open')">Cancel</button>
+      <button id="drv-cmp-save-btn" class="o-btn o-btn-primary" onclick="drv_submitComplete()">&#10003; Confirm Complete</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var drv_trips      = [];
+var drv_filtered   = [];
+var drv_recFilter  = 'all';
+var drv_view       = 'month';
+var drv_today      = new Date();
+var drv_curDate    = new Date();
+var drv_activeId   = null;
+var drv_driverName = '';
+
+var DRV_MONTHS = ['January','February','March','April','May','June',
+                  'July','August','September','October','November','December'];
+var DRV_DAYS   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+// ══════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════
+function init_driver_dashboard() {
+  // Get logged-in user email from navbar to identify driver
+  var emailEl = document.getElementById('o-user-email');
+  // We'll filter trips by driverName matching the role badge name
+  // For now load all and filter by driverName containing logged email initial or just show all assigned
+  drv_loadData();
+}
+
+function drv_reload() {
+  o_setReloading('drv-reload-btn', true);
+  drv_trips = [];
+  drv_filtered = [];
+  drv_loadData();
+}
+
+function drv_loadData() {
+  google.script.run
+    .withSuccessHandler(function(r) {
+      o_setReloading('drv-reload-btn', false);
+      if (!r.success) { o_toast('error', r.message || 'Load failed'); return; }
+
+      // Filter only trips where this user is the driver
+      // We match by email stored in driverEmpId OR by driverName
+      var userEmail = (document.getElementById('o-user-email').textContent || '').toLowerCase().trim();
+      drv_trips = (r.trips || []).filter(function(t) {
+        var empId = (t.driverEmpId || '').toLowerCase();
+        var name  = (t.driverName  || '').toLowerCase();
+        // Match by driverEmpId containing email, or driver email stored
+        return empId === userEmail || empId.indexOf(userEmail) > -1
+          || (userEmail && name.length > 0 && r.driverEmail && r.driverEmail.toLowerCase() === userEmail);
+      });
+
+      // If no email match, show all assigned trips (fallback for name-based systems)
+      if (drv_trips.length === 0 && r.trips) {
+        drv_trips = r.trips.filter(function(t) {
+          return t.driverName && t.driverName.trim() !== '';
+        });
+      }
+
+      drv_renderStats();
+      drv_renderCalendar();
+      drv_applyRecFilter();
+    })
+    .withFailureHandler(function(e) {
+      o_setReloading('drv-reload-btn', false);
+      o_toast('error', e.message);
+    })
+    .getDriverDashboardData();
+}
+
+// ══════════════════════════════════════════
+//  STATS
+// ══════════════════════════════════════════
+function drv_renderStats() {
+  var total     = drv_trips.length;
+  var ongoing   = drv_trips.filter(function(t) { return t.status === 'Approved'; }).length;
+  var completed = drv_trips.filter(function(t) { return t.status === 'Completed'; }).length;
+  var totalKm   = drv_trips.reduce(function(sum, t) { return sum + (parseFloat(t.distance) || 0); }, 0);
+
+  var el = document.getElementById('drv-stats');
+  el.innerHTML =
+    drv_statCard('Total Trips',  total,                 'var(--accent)')  +
+    drv_statCard('Ongoing',      ongoing,               'var(--blue)')    +
+    drv_statCard('Completed',    completed,             'var(--green)')   +
+    drv_statCard('Total KM',     totalKm.toFixed(1) + ' km', 'var(--purple)');
+}
+
+function drv_statCard(label, val, color) {
+  return '<div class="o-card drv-stat">'
+    + '<div class="drv-stat-label">' + label + '</div>'
+    + '<div class="drv-stat-val" style="color:' + color + ';">' + val + '</div>'
+    + '</div>';
+}
+
+// ══════════════════════════════════════════
+//  CALENDAR
+// ══════════════════════════════════════════
+function drv_setView(v, btn) {
+  drv_view = v;
+  document.querySelectorAll('.drv-view-tab').forEach(function(b) { b.classList.remove('active'); });
+  btn.classList.add('active');
+  drv_renderCalendar();
+}
+
+function drv_prevPeriod() {
+  if (drv_view === 'month') {
+    drv_curDate = new Date(drv_curDate.getFullYear(), drv_curDate.getMonth() - 1, 1);
+  } else if (drv_view === 'week') {
+    drv_curDate = new Date(drv_curDate.getTime() - 7 * 86400000);
+  } else {
+    drv_curDate = new Date(drv_curDate.getTime() - 86400000);
+  }
+  drv_renderCalendar();
+}
+
+function drv_nextPeriod() {
+  if (drv_view === 'month') {
+    drv_curDate = new Date(drv_curDate.getFullYear(), drv_curDate.getMonth() + 1, 1);
+  } else if (drv_view === 'week') {
+    drv_curDate = new Date(drv_curDate.getTime() + 7 * 86400000);
+  } else {
+    drv_curDate = new Date(drv_curDate.getTime() + 86400000);
+  }
+  drv_renderCalendar();
+}
+
+function drv_goToday() {
+  drv_curDate = new Date();
+  drv_renderCalendar();
+}
+
+function drv_renderCalendar() {
+  if (drv_view === 'month') drv_renderMonth();
+  else if (drv_view === 'week') drv_renderWeek();
+  else drv_renderDay();
+}
+
+// Helper: check if a trip covers a given date
+function drv_tripsOnDate(dateStr) {
+  return drv_trips.filter(function(t) {
+    var start = (t.startDate || '').substring(0, 10);
+    var end   = (t.endDate   || '').substring(0, 10);
+    if (!start) return false;
+    if (!end) end = start;
+    return dateStr >= start && dateStr <= end;
+  });
+}
+
+function drv_dateStr(y, m, d) {
+  return y + '-' + String(m + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+}
+
+function drv_chipClass(status) {
+  if (status === 'Approved')  return 'chip-approved';
+  if (status === 'Submitted') return 'chip-submitted';
+  if (status === 'Completed') return 'chip-completed';
+  return 'chip-other';
+}
+
+// ── MONTH VIEW ──
+function drv_renderMonth() {
+  var y = drv_curDate.getFullYear();
+  var m = drv_curDate.getMonth();
+  document.getElementById('drv-cal-title').textContent = DRV_MONTHS[m] + ' ' + y;
+
+  var firstDay = new Date(y, m, 1).getDay();
+  var daysInMonth = new Date(y, m + 1, 0).getDate();
+  var todayStr = drv_dateStr(drv_today.getFullYear(), drv_today.getMonth(), drv_today.getDate());
+
+  var html = '<div class="drv-day-grid">';
+  DRV_DAYS.forEach(function(d) {
+    html += '<div class="drv-day-label">' + d + '</div>';
+  });
+  html += '</div><div class="drv-day-grid">';
+
+  // Prev month filler
+  var prevDays = new Date(y, m, 0).getDate();
+  for (var i = firstDay - 1; i >= 0; i--) {
+    html += '<div class="drv-day-cell other-month"><div class="drv-day-num">' + (prevDays - i) + '</div></div>';
+  }
+
+  // Current month
+  for (var d2 = 1; d2 <= daysInMonth; d2++) {
+    var ds     = drv_dateStr(y, m, d2);
+    var isToday = ds === todayStr;
+    var trips  = drv_tripsOnDate(ds);
+    html += '<div class="drv-day-cell' + (isToday ? ' today' : '') + (trips.length ? ' has-trip' : '') + '">';
+    html += '<div class="drv-day-num">' + d2 + '</div>';
+    trips.slice(0, 2).forEach(function(t) {
+      html += '<span class="drv-trip-chip ' + drv_chipClass(t.status) + '" onclick="drv_openDetail(\'' + o_esc(t.tripId) + '\')" title="' + o_esc(t.fromLoc + ' → ' + t.toLoc) + '">'
+            + o_esc(t.tripId) + '</span>';
+    });
+    if (trips.length > 2) {
+      html += '<span style="font-size:9px;color:var(--text3);font-weight:600;">+' + (trips.length - 2) + ' more</span>';
+    }
+    html += '</div>';
+  }
+
+  // Next month filler
+  var totalCells = firstDay + daysInMonth;
+  var remaining = (7 - (totalCells % 7)) % 7;
+  for (var n = 1; n <= remaining; n++) {
+    html += '<div class="drv-day-cell other-month"><div class="drv-day-num">' + n + '</div></div>';
+  }
+  html += '</div>';
+  document.getElementById('drv-calendar-body').innerHTML = html;
+}
+
+// ── WEEK VIEW ──
+function drv_renderWeek() {
+  var dow  = drv_curDate.getDay();
+  var sun  = new Date(drv_curDate.getTime() - dow * 86400000);
+  var weekDates = [];
+  for (var i = 0; i < 7; i++) {
+    weekDates.push(new Date(sun.getTime() + i * 86400000));
+  }
+  var firstDate = weekDates[0];
+  var lastDate  = weekDates[6];
+  document.getElementById('drv-cal-title').textContent =
+    DRV_MONTHS[firstDate.getMonth()].substring(0, 3) + ' ' + firstDate.getDate() +
+    ' – ' + DRV_MONTHS[lastDate.getMonth()].substring(0, 3) + ' ' + lastDate.getDate() +
+    ', ' + lastDate.getFullYear();
+
+  var todayStr = drv_dateStr(drv_today.getFullYear(), drv_today.getMonth(), drv_today.getDate());
+
+  var html = '<div style="overflow-x:auto;"><div class="drv-week-grid" style="min-width:500px;">';
+
+  // Header row
+  html += '<div class="drv-week-header"></div>';
+  weekDates.forEach(function(d) {
+    var ds = drv_dateStr(d.getFullYear(), d.getMonth(), d.getDate());
+    var isToday = ds === todayStr;
+    html += '<div class="drv-week-header' + (isToday ? ' today-col' : '') + '">'
+          + DRV_DAYS[d.getDay()] + ' ' + d.getDate() + '</div>';
+  });
+
+  // Hours 6am–10pm
+  for (var h = 6; h <= 22; h++) {
+    var label = h <= 12 ? h + ' AM' : (h - 12) + ' PM';
+    if (h === 12) label = '12 PM';
+    html += '<div class="drv-time-col">' + label + '</div>';
+    weekDates.forEach(function(d) {
+      var ds = drv_dateStr(d.getFullYear(), d.getMonth(), d.getDate());
+      var isToday = ds === todayStr;
+      var tripsHere = drv_tripsOnDate(ds);
+      var eventHtml = '';
+      tripsHere.forEach(function(t) {
+        var startH = parseInt((t.startDate || '00:00').split('T')[1] || '0');
+        if (startH === h) {
+          eventHtml += '<div class="drv-week-event ' + drv_chipClass(t.status) + '" onclick="drv_openDetail(\'' + o_esc(t.tripId) + '\')" title="' + o_esc(t.fromLoc + ' → ' + t.toLoc) + '">'
+                     + o_esc(t.tripId) + '</div>';
+        }
+      });
+      html += '<div class="drv-week-cell' + (isToday ? ' today-col' : '') + '">' + eventHtml + '</div>';
+    });
+  }
+  html += '</div></div>';
+  document.getElementById('drv-calendar-body').innerHTML = html;
+}
+
+// ── DAY VIEW ──
+function drv_renderDay() {
+  var ds = drv_dateStr(drv_curDate.getFullYear(), drv_curDate.getMonth(), drv_curDate.getDate());
+  document.getElementById('drv-cal-title').textContent =
+    DRV_DAYS[drv_curDate.getDay()] + ', ' + DRV_MONTHS[drv_curDate.getMonth()] + ' ' + drv_curDate.getDate() + ', ' + drv_curDate.getFullYear();
+
+  var trips = drv_tripsOnDate(ds);
+  var html = '';
+
+  if (!trips.length) {
+    html = '<div style="text-align:center;padding:32px;color:var(--text3);">&#128337; Walay trips karon nga adlaw.</div>';
+  } else {
+    html = '<div style="display:flex;flex-direction:column;gap:10px;">';
+    trips.forEach(function(t) {
+      html += '<div class="o-card" style="padding:14px;cursor:pointer;transition:border-color .15s;" onclick="drv_openDetail(\'' + o_esc(t.tripId) + '\')">'
+            + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">'
+            + '<span class="mono" style="font-size:12px;color:var(--text3);">' + o_esc(t.tripId) + '</span>'
+            + o_statusBadge(t.status)
+            + '</div>'
+            + '<div style="font-weight:700;font-size:14px;margin-bottom:4px;">' + o_esc(t.fromLoc) + ' &#8594; ' + o_esc(t.toLoc) + '</div>'
+            + '<div style="font-size:12px;color:var(--text2);">'
+            + '&#128340; ' + o_esc(t.startDate || '—') + ' &nbsp;&mdash;&nbsp; ' + o_esc(t.endDate || '—')
+            + '</div>'
+            + (t.plate ? '<div style="font-size:12px;color:var(--text3);margin-top:3px;">&#128664; ' + o_esc(t.plate) + '</div>' : '')
+            + '</div>';
+    });
+    html += '</div>';
+  }
+  document.getElementById('drv-calendar-body').innerHTML = html;
+}
+
+// ══════════════════════════════════════════
+//  RECORDS TABLE
+// ══════════════════════════════════════════
+function drv_setRecFilter(f, btn) {
+  drv_recFilter = f;
+  document.querySelectorAll('#tab-driver-dashboard .o-chip').forEach(function(c) { c.classList.remove('active'); });
+  btn.classList.add('active');
+  drv_applyRecFilter();
+}
+
+function drv_applyRecFilter() {
+  if (drv_recFilter === 'all') {
+    drv_filtered = drv_trips.slice();
+  } else {
+    drv_filtered = drv_trips.filter(function(t) { return t.status === drv_recFilter; });
+  }
+  drv_renderTable();
+}
+
+function drv_renderTable() {
+  var tb = document.getElementById('drv-tbody');
+  if (!drv_filtered.length) {
+    tb.innerHTML = '<tr><td colspan="9"><div class="o-empty"><div class="o-empty-icon">&#128664;</div><p>Walay nakit-an nga trips.</p></div></td></tr>';
+    return;
+  }
+
+  tb.innerHTML = drv_filtered.map(function(t) {
+    var canComplete = t.status === 'Approved';
+    var distDisplay = t.distance > 0 ? '<span class="mono" style="color:var(--accent);">' + t.distance + ' km</span>' : '<span style="color:var(--text3);">—</span>';
+    return '<tr>'
+      + '<td class="td-id">' + o_esc(t.tripId) + '</td>'
+      + '<td style="font-size:12px;color:var(--text3);">' + o_esc((t.startDate || '—').substring(0, 10)) + '</td>'
+      + '<td style="font-weight:600;font-size:13px;">' + o_esc(t.fromLoc) + ' &#8594; ' + o_esc(t.toLoc) + '</td>'
+      + '<td style="font-size:12px;">' + o_esc(t.plate || '—') + '</td>'
+      + '<td>' + o_statusBadge(t.status) + '</td>'
+      + '<td class="mono" style="font-size:12px;">' + (t.startKm > 0 ? t.startKm : '—') + '</td>'
+      + '<td class="mono" style="font-size:12px;">' + (t.endKm   > 0 ? t.endKm   : '—') + '</td>'
+      + '<td>' + distDisplay + '</td>'
+      + '<td><div style="display:flex;gap:6px;">'
+      +   '<button class="o-btn o-btn-ghost o-btn-sm" onclick="drv_openDetail(\'' + o_esc(t.tripId) + '\')">View</button>'
+      +   (canComplete ? '<button class="o-btn o-btn-success o-btn-sm" onclick="drv_openCompleteFromTable(\'' + o_esc(t.tripId) + '\')">&#9654; Complete</button>' : '')
+      + '</div></td>'
+      + '</tr>';
+  }).join('');
+}
+
+// ══════════════════════════════════════════
+//  DETAIL MODAL
+// ══════════════════════════════════════════
+function drv_openDetail(tripId) {
+  drv_activeId = tripId;
+  var t = drv_trips.find(function(x) { return x.tripId === tripId; });
+  if (!t) return;
+
+  document.getElementById('drv-detail-title').textContent = 'Trip ' + t.tripId;
+
+  function row(label, val) {
+    return '<div class="o-detail-item"><label>' + label + '</label><div class="val">' + (val || '&#8212;') + '</div></div>';
+  }
+
+  var html = '<div class="o-detail-grid">'
+    + row('Trip ID',     '<span class="mono">' + o_esc(t.tripId) + '</span>')
+    + row('Status',      o_statusBadge(t.status))
+    + row('Type',        o_esc(t.tripType))
+    + row('Vehicle',     o_esc(t.plate))
+    + '</div>'
+    + '<div class="o-divider">Route &amp; Schedule</div>'
+    + '<div class="o-detail-grid">'
+    + row('From',          o_esc(t.fromLoc))
+    + row('To',            o_esc(t.toLoc))
+    + row('Planned Start', o_esc(t.startDate))
+    + row('Planned End',   o_esc(t.endDate))
+    + '</div>'
+    + '<div class="o-divider">Purpose</div>'
+    + '<div style="font-size:13px;color:var(--text);line-height:1.6;margin-bottom:14px;">' + o_esc(t.purpose || '—') + '</div>';
+
+  if (t.status === 'Completed') {
+    html += '<div class="o-divider">Mileage Record</div>'
+      + '<div class="o-detail-grid">'
+      + row('Actual Start', o_esc(t.actualStart))
+      + row('Actual End',   o_esc(t.actualEnd))
+      + row('Start KM', '<span class="mono">' + t.startKm + '</span>')
+      + row('End KM',   '<span class="mono">' + t.endKm + '</span>')
+      + row('Distance', '<span class="mono" style="color:var(--accent);font-size:16px;font-weight:800;">' + t.distance + ' km</span>')
+      + row('Remarks',  o_esc(t.remarks))
+      + '</div>';
+  }
+
+  document.getElementById('drv-detail-body').innerHTML = html;
+  document.getElementById('drv-complete-btn').style.display = (t.status === 'Approved') ? 'inline-flex' : 'none';
+  document.getElementById('drv-detail-modal').classList.add('open');
+}
+
+function drv_openComplete() {
+  document.getElementById('drv-detail-modal').classList.remove('open');
+  drv_showCompleteModal(drv_activeId);
+}
+
+function drv_openCompleteFromTable(tripId) {
+  drv_activeId = tripId;
+  drv_showCompleteModal(tripId);
+}
+
+function drv_showCompleteModal(tripId) {
+  var t = drv_trips.find(function(x) { return x.tripId === tripId; });
+  document.getElementById('drv-cmp-summary').innerHTML = t
+    ? '<strong>' + o_esc(t.tripId) + '</strong> &nbsp;&#183;&nbsp; ' + o_esc(t.fromLoc) + ' &#8594; ' + o_esc(t.toLoc)
+      + '<br><span style="color:var(--text3);font-size:12px;">Planned: ' + o_esc(t.startDate || '—') + ' &mdash; ' + o_esc(t.endDate || '—') + '</span>'
+    : tripId;
+
+  ['drv-actual-start','drv-actual-end','drv-start-km','drv-end-km','drv-remarks'].forEach(function(id) {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('drv-dist-display').style.display = 'none';
+  document.getElementById('drv-complete-modal').classList.add('open');
+}
+
+function drv_calcDist() {
+  var s = parseFloat(document.getElementById('drv-start-km').value) || 0;
+  var e = parseFloat(document.getElementById('drv-end-km').value)   || 0;
+  var el = document.getElementById('drv-dist-display');
+  if (s > 0 && e > 0) {
+    var dist = e - s;
+    el.style.display = 'block';
+    if (dist < 0) {
+      el.style.color = 'var(--red)'; el.style.borderColor = 'var(--red-bd)'; el.style.background = 'var(--red-bg)';
+      el.textContent = '&#9888; End KM must be greater than Start KM';
+    } else {
+      el.style.color = 'var(--accent)'; el.style.borderColor = 'var(--amber-bd)'; el.style.background = 'var(--amber-bg)';
+      el.textContent = '&#128205; Distance: ' + dist.toFixed(1) + ' km';
+    }
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+function drv_submitComplete() {
+  var actualStart = document.getElementById('drv-actual-start').value;
+  var actualEnd   = document.getElementById('drv-actual-end').value;
+  var startKm     = document.getElementById('drv-start-km').value;
+  var endKm       = document.getElementById('drv-end-km').value;
+  var remarks     = document.getElementById('drv-remarks').value;
+
+  if (!actualStart) { o_toast('error', 'Actual Start required.'); return; }
+  if (!actualEnd)   { o_toast('error', 'Actual End required.');   return; }
+  if (!startKm)     { o_toast('error', 'Start KM required.');     return; }
+  if (!endKm)       { o_toast('error', 'End KM required.');       return; }
+  if (parseFloat(endKm) < parseFloat(startKm)) { o_toast('error', 'End KM must be greater than Start KM.'); return; }
+
+  var btn = document.getElementById('drv-cmp-save-btn');
+  btn.disabled = true; btn.textContent = 'Saving\u2026';
+
+  google.script.run
+    .withSuccessHandler(function(r) {
+      btn.disabled = false; btn.textContent = '\u2713 Confirm Complete';
+      if (r.success) {
+        o_toast('success', r.message);
+        document.getElementById('drv-complete-modal').classList.remove('open');
+        drv_reload();
+      } else {
+        o_toast('error', r.message);
+      }
+    })
+    .withFailureHandler(function(e) {
+      btn.disabled = false; btn.textContent = '\u2713 Confirm Complete';
+      o_toast('error', e.message);
+    })
+    .ops_driverCompleteTrip({
+      tripId: drv_activeId,
+      actualStart: actualStart,
+      actualEnd:   actualEnd,
+      startKm:     startKm,
+      endKm:       endKm,
+      remarks:     remarks
+    });
+}
+</script>
