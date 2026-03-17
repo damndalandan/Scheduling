@@ -297,8 +297,7 @@ function lg_submit() {
           document.getElementById('o-user-email').textContent  = r.email || '';
           document.getElementById('o-user-avatar').textContent = (r.email || 'U').charAt(0).toUpperCase();
           document.getElementById('o-role-badge').textContent  = r.role  || 'No Role';
-          switchTab('dashboard');
-          init_dashboard();
+          o_applyRoleUI(r.role || '');
         }, 400);
       } else {
         lg_showAlert(r.message || 'Incorrect email or password.');

@@ -367,9 +367,59 @@ function o_reloadTab(tabName) {
   switchTab(tabName);
 }
 
+// ✅ ROLE-BASED UI — hides/shows nav items and tabs based on role
+function o_applyRoleUI(role) {
+  var isDriver = role.toLowerCase() === 'driver';
+
+  // Nav items to hide for driver (data-tab values)
+  var driverHidden = ['vehicles', 'renewals', 'new-trip', 'approval', 'completion', 'reports'];
+
+  driverHidden.forEach(function(tab) {
+    var navEl = document.querySelector('.o-nav-item[data-tab="' + tab + '"]');
+    if (navEl) navEl.style.display = isDriver ? 'none' : '';
+  });
+
+  // Also hide the nav section labels if driver
+  // Hide "Vehicles" section label and divider
+  var allSections = document.querySelectorAll('.o-nav-section, .o-nav-divider');
+  if (isDriver) {
+    // Hide everything except Overview section and its divider
+    // We do this by hiding all sections/dividers after the first nav item
+    var navList = document.querySelector('#o-sidebar > div[style*="flex:1"]');
+    if (navList) {
+      var children = navList.children;
+      var dashboardFound = false;
+      for (var i = 0; i < children.length; i++) {
+        var el = children[i];
+        var isOverviewSection = el.classList.contains('o-nav-section') && el.textContent.trim() === 'Overview';
+        var isDashboardItem   = el.classList.contains('o-nav-item') && el.getAttribute('data-tab') === 'dashboard';
+        if (isOverviewSection || isDashboardItem) {
+          el.style.display = '';
+        } else if (!el.classList.contains('o-nav-item')) {
+          // sections, dividers — hide them for driver
+          el.style.display = 'none';
+        }
+      }
+    }
+  }
+
+  // If driver, boot into trips tab (showing only their assigned trips)
+  if (isDriver) {
+    switchTab('trips');
+    init_trips();
+  } else {
+    switchTab('dashboard');
+    init_dashboard();
+  }
+}
+
 // ✅ LOGOUT FUNCTION — clears session and returns to login screen
 function o_logout() {
   if (!confirm('Sign out ka ba?')) return;
+
+  // Restore all hidden nav items (in case driver was logged in)
+  document.querySelectorAll('#o-sidebar .o-nav-item, #o-sidebar .o-nav-section, #o-sidebar .o-nav-divider')
+    .forEach(function(el) { el.style.display = ''; });
 
   // Clear navbar user info
   document.getElementById('o-user-email').textContent  = '';
