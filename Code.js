@@ -373,6 +373,27 @@ function ops_getJOList() {
   }
 }
 
+function ops_getEmployeeList() {
+  try {
+    var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('EmployeName');
+    if (!sh) return { success: false, message: 'EmployeName sheet not found.' };
+    var lr = sh.getLastRow();
+    if (lr < 2) return { success: true, data: [] };
+    var data = sh.getRange(2, 1, lr - 1, 3).getValues();
+    var list = [];
+    data.forEach(function(r) {
+      var empId   = String(r[0] || '').trim(); // Column A: Employee Code
+      var team    = String(r[1] || '').trim(); // Column B: Team
+      var empName = String(r[2] || '').trim(); // Column C: Name of Employee
+      if (empName) list.push({ empId: empId, empName: empName, team: team });
+    });
+    return { success: true, data: list };
+  } catch(e) {
+    return { success: false, message: 'ops_getEmployeeList error: ' + e.message };
+  }
+}
+
+
 // ============================================================
 //  COMBINED INIT DATA (one call per tab)
 // ============================================================
@@ -404,13 +425,15 @@ function getDashboardInitData() {
 // Trips tab init — trips + vehicles (for dropdown)
 function getTripsInitData() {
   try {
-    const user     = ops_getUserInfo_();
-    const trips    = ops_getAllTrips_();
-    const vehicles = ops_getAllVehicles_();
-    const joResult = ops_getJOList();
-    const joList   = joResult.success ? joResult.data : [];
-    const joError  = joResult.success ? null : joResult.message;
-    return { success: true, user, trips, vehicles, joList, joError };
+    var user      = ops_getUserInfo_();
+    var trips     = ops_getAllTrips_();
+    var vehicles  = ops_getAllVehicles_();
+    var joResult  = ops_getJOList();
+    var empResult = ops_getEmployeeList();
+    var joList    = joResult.success  ? joResult.data  : [];
+    var joError   = joResult.success  ? null            : joResult.message;
+    var empList   = empResult.success ? empResult.data : [];
+    return { success: true, user: user, trips: trips, vehicles: vehicles, joList: joList, joError: joError, empList: empList };
   } catch(e) { return { success: false, message: e.message }; }
 }
 

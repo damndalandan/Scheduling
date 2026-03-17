@@ -18,14 +18,35 @@
       <!-- Section: Requestor Info -->
       <div class="o-divider" style="margin-top:0;">Requestor Information</div>
       <div class="o-form-grid" style="margin-bottom:18px;">
-        <div class="o-form-group">
+
+        <!-- Requestor Name — searchable dropdown -->
+        <div class="o-form-group" style="position:relative;">
           <label class="o-label">Requestor Name *</label>
-          <input id="nt-req-name" class="o-input" placeholder="Full name">
+          <input id="nt-req-name-search" class="o-input"
+                 placeholder="Loading employees…"
+                 autocomplete="off"
+                 oninput="nt_onEmpInput()"
+                 onfocus="nt_showEmpDrop()"
+                 onblur="setTimeout(nt_hideEmpDrop, 200)"
+                 disabled>
+          <!-- Hidden field stores the actual submitted value -->
+          <input type="hidden" id="nt-req-name">
+          <!-- Dropdown list -->
+          <div id="nt-emp-drop" style="display:none;position:absolute;z-index:9999;top:calc(100% + 2px);left:0;right:0;
+               background:var(--surface2);border:1.5px solid var(--accent);border-radius:var(--radius);
+               max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.5);">
+            <div id="nt-emp-list"></div>
+          </div>
         </div>
+
+        <!-- Employee ID — auto-filled but still editable -->
         <div class="o-form-group">
-          <label class="o-label">Employee ID <span style="color:var(--text3);font-weight:400;">(optional)</span></label>
-          <input id="nt-req-empid" class="o-input" placeholder="e.g. EMP-001">
+          <label class="o-label">Employee ID <span style="color:var(--text3);font-weight:400;">(auto-filled)</span></label>
+          <input id="nt-req-empid" class="o-input"
+                 placeholder="Auto-filled when name is selected"
+                 style="color:var(--accent);">
         </div>
+
       </div>
 
       <!-- Section: Trip Details -->
@@ -133,14 +154,18 @@
 </div>
 
 <script>
-var nt_vehicles = [];
-var nt_joList   = [];    // full JO list from JODatabase
-var nt_joFiltered = [];  // currently filtered
+var nt_vehicles   = [];
+var nt_joList     = [];
+var nt_joFiltered = [];
+var nt_empList    = [];
+var nt_empFiltered = [];
 
+// ── INIT ──
 function init_new_trip() {
-  // Show JO field loading state
   document.getElementById('nt-jo-search').placeholder = 'Loading JOs…';
-  document.getElementById('nt-jo-search').disabled = true;
+  document.getElementById('nt-jo-search').disabled    = true;
+  document.getElementById('nt-req-name-search').placeholder = 'Loading employees…';
+  document.getElementById('nt-req-name-search').disabled    = true;
 
   google.script.run
     .withSuccessHandler(function(r) {
@@ -151,29 +176,112 @@ function init_new_trip() {
       nt_populateVehicles();
 
       // JO list
-      nt_joList = r.joList || [];
+      nt_joList     = r.joList || [];
       nt_joFiltered = nt_joList.slice();
-      var joInput = document.getElementById('nt-jo-search');
+      var joInput   = document.getElementById('nt-jo-search');
       joInput.disabled = false;
       if (nt_joList.length) {
         joInput.placeholder = 'Search JO number or description… (' + nt_joList.length + ' JOs)';
       } else {
-        // Show actual backend message so we can debug
-        var joMsg = r.joError || 'No JOs found in Line-up JOs';
+        var joMsg = r.joError || 'No JOs found';
         joInput.placeholder = joMsg;
-        joInput.title = joMsg; // tooltip on hover
-        console.warn('JO load issue:', joMsg);
+        joInput.title = joMsg;
+      }
+
+      // Employee list
+      nt_empList    = r.empList || [];
+      nt_empFiltered = nt_empList.slice();
+      var empInput  = document.getElementById('nt-req-name-search');
+      empInput.disabled = false;
+      if (nt_empList.length) {
+        empInput.placeholder = 'Type or select employee… (' + nt_empList.length + ' employees)';
+      } else {
+        empInput.placeholder = 'Type name manually…';
       }
     })
     .withFailureHandler(function(e) {
-      document.getElementById('nt-jo-search').disabled = false;
+      document.getElementById('nt-jo-search').disabled  = false;
       document.getElementById('nt-jo-search').placeholder = 'Error loading JOs — type manually';
-      o_toast('error', 'JO load failed: ' + e.message);
+      document.getElementById('nt-req-name-search').disabled = false;
+      document.getElementById('nt-req-name-search').placeholder = 'Error loading employees — type manually';
+      o_toast('error', 'Init failed: ' + e.message);
     })
     .getTripsInitData();
 }
 
-// ── JO Dropdown logic ──
+// ══════════════════════════════════════════
+//  EMPLOYEE DROPDOWN
+// ══════════════════════════════════════════
+function nt_onEmpInput() {
+  var q = (document.getElementById('nt-req-name-search').value || '').toLowerCase().trim();
+  nt_empFiltered = q
+    ? nt_empList.filter(function(e) {
+        return e.empName.toLowerCase().includes(q) || e.empId.toLowerCase().includes(q);
+      })
+    : nt_empList.slice();
+
+  // Allow manual typing — store the typed value but clear auto-filled ID
+  document.getElementById('nt-req-name').value  = document.getElementById('nt-req-name-search').value;
+  document.getElementById('nt-req-empid').value = '';
+
+  nt_renderEmpList();
+  nt_showEmpDrop();
+}
+
+function nt_renderEmpList() {
+  var container = document.getElementById('nt-emp-list');
+  var slice = nt_empFiltered.slice(0, 60);
+
+  if (!slice.length) {
+    container.innerHTML = '<div style="padding:12px 14px;font-size:13px;color:var(--text3);text-align:center;">Walay nakit-an nga empleyado.</div>';
+    return;
+  }
+
+  var html = '';
+  for (var i = 0; i < slice.length; i++) {
+    var e = slice[i];
+    html += '<div class="nt-emp-item" data-idx="' + i + '" style="padding:9px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .12s;">'
+          +   '<div style="font-size:13px;font-weight:600;color:var(--text);">' + o_esc(e.empName) + '</div>'
+          +   '<div style="font-size:11px;color:var(--text3);margin-top:1px;">'
+          +     o_esc(e.empId) + (e.team ? ' &nbsp;·&nbsp; ' + o_esc(e.team) : '')
+          +   '</div>'
+          + '</div>';
+  }
+  if (nt_empFiltered.length > 60) {
+    html += '<div style="padding:8px 14px;font-size:11px;color:var(--text3);text-align:center;">+ ' + (nt_empFiltered.length - 60) + ' more — refine your search</div>';
+  }
+  container.innerHTML = html;
+
+  container.querySelectorAll('.nt-emp-item').forEach(function(el) {
+    var idx = parseInt(el.getAttribute('data-idx'));
+    el.addEventListener('mouseenter', function() { this.style.background = 'var(--amber-bg)'; });
+    el.addEventListener('mouseleave', function() { this.style.background = 'transparent'; });
+    el.addEventListener('mousedown', function(ev) {
+      ev.preventDefault();
+      nt_selectEmployee(slice[idx]);
+    });
+  });
+}
+
+function nt_selectEmployee(emp) {
+  document.getElementById('nt-req-name-search').value = emp.empName;
+  document.getElementById('nt-req-name').value         = emp.empName;
+  document.getElementById('nt-req-empid').value        = emp.empId;
+  nt_hideEmpDrop();
+}
+
+function nt_showEmpDrop() {
+  nt_renderEmpList();
+  document.getElementById('nt-emp-drop').style.display = 'block';
+}
+
+function nt_hideEmpDrop() {
+  document.getElementById('nt-emp-drop').style.display = 'none';
+}
+
+// ══════════════════════════════════════════
+//  JO DROPDOWN
+// ══════════════════════════════════════════
 function nt_filterJO() {
   var q = (document.getElementById('nt-jo-search').value || '').toLowerCase().trim();
   nt_joFiltered = q
@@ -182,10 +290,8 @@ function nt_filterJO() {
       })
     : nt_joList.slice();
 
-  // Clear selection if user is typing again
   document.getElementById('nt-related-jo').value = '';
   document.getElementById('nt-jo-selected-badge').style.display = 'none';
-
   nt_renderJOList();
   nt_showJODropdown();
 }
@@ -197,9 +303,8 @@ function nt_renderJOList() {
     return;
   }
 
-  // Use index-based onclick to avoid ALL quote escaping issues
   var slice = nt_joFiltered.slice(0, 80);
-  var rows = '';
+  var rows  = '';
   for (var i = 0; i < slice.length; i++) {
     var j = slice[i];
     rows += '<div class="nt-jo-item" data-idx="' + i + '">'
@@ -209,15 +314,14 @@ function nt_renderJOList() {
   }
   container.innerHTML = rows;
 
-  // Attach events via JS — no inline onclick, no quote issues
   var items = container.querySelectorAll('.nt-jo-item');
   items.forEach(function(el) {
     var idx = parseInt(el.getAttribute('data-idx'));
     el.style.cssText = 'padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .12s;';
     el.addEventListener('mouseenter', function() { this.style.background = 'var(--amber-bg)'; });
     el.addEventListener('mouseleave', function() { this.style.background = 'transparent'; });
-    el.addEventListener('mousedown',  function(e) {
-      e.preventDefault(); // prevent input blur before click fires
+    el.addEventListener('mousedown', function(e) {
+      e.preventDefault();
       nt_selectJO(slice[idx].joNumber, slice[idx].jobDesc);
     });
   });
@@ -231,14 +335,11 @@ function nt_renderJOList() {
 }
 
 function nt_selectJO(joNumber, jobDesc) {
-  // Store the JO number in hidden field
-  document.getElementById('nt-related-jo').value = joNumber;
-  // Show search box with the full display text
-  document.getElementById('nt-jo-search').value  = joNumber + (jobDesc ? ' — ' + jobDesc : '');
-  // Show selected badge
+  document.getElementById('nt-jo-search').value = joNumber + (jobDesc ? ' — ' + jobDesc : '');
   var badge = document.getElementById('nt-jo-selected-badge');
   badge.style.display = 'block';
   badge.textContent   = joNumber;
+  document.getElementById('nt-related-jo').value = joNumber;
   nt_hideJODropdown();
 }
 
@@ -251,6 +352,9 @@ function nt_hideJODropdown() {
   document.getElementById('nt-jo-dropdown').style.display = 'none';
 }
 
+// ══════════════════════════════════════════
+//  VEHICLES
+// ══════════════════════════════════════════
 function nt_populateVehicles() {
   var sel = document.getElementById('nt-vehicle-id');
   sel.innerHTML = '<option value="">-- Select Vehicle --</option>'
@@ -262,27 +366,39 @@ function nt_populateVehicles() {
 }
 
 function nt_onVehicleChange() {
-  var sel  = document.getElementById('nt-vehicle-id');
-  var opt  = sel.options[sel.selectedIndex];
+  var sel = document.getElementById('nt-vehicle-id');
+  var opt = sel.options[sel.selectedIndex];
   document.getElementById('nt-plate').value = opt ? (opt.getAttribute('data-plate') || '') : '';
 }
 
+// ══════════════════════════════════════════
+//  RESET
+// ══════════════════════════════════════════
 function nt_reset() {
-  ['nt-req-name','nt-req-empid','nt-related-jo','nt-purpose',
-   'nt-from','nt-to','nt-start-date','nt-end-date',
-   'nt-driver-name','nt-driver-empid','nt-plate'].forEach(function(id) {
-    document.getElementById(id).value = '';
-  });
+  // Clear employee fields
+  document.getElementById('nt-req-name-search').value = '';
+  document.getElementById('nt-req-name').value         = '';
+  document.getElementById('nt-req-empid').value        = '';
+  nt_hideEmpDrop();
+
+  // Clear other fields
+  ['nt-related-jo','nt-purpose','nt-from','nt-to',
+   'nt-start-date','nt-end-date','nt-driver-name','nt-driver-empid','nt-plate']
+    .forEach(function(id) { document.getElementById(id).value = ''; });
+
   document.getElementById('nt-trip-type').value  = '';
   document.getElementById('nt-vehicle-id').value = '';
-  // Clear JO search display
+
+  // Clear JO search
   document.getElementById('nt-jo-search').value          = '';
   document.getElementById('nt-jo-selected-badge').style.display = 'none';
   nt_hideJODropdown();
 }
 
+// ══════════════════════════════════════════
+//  SAVE / SUBMIT
+// ══════════════════════════════════════════
 function nt_saveTrip(status) {
-  // Validate base fields
   var reqName   = document.getElementById('nt-req-name').value.trim();
   var tripType  = document.getElementById('nt-trip-type').value;
   var purpose   = document.getElementById('nt-purpose').value.trim();
@@ -314,12 +430,20 @@ function nt_saveTrip(status) {
   submitBtn.textContent = status === 'Submitted' ? 'Submitting…' : 'Saving…';
 
   var payload = {
-    reqName, reqEmpId: document.getElementById('nt-req-empid').value.trim(),
-    tripType, purpose, relatedJo: document.getElementById('nt-related-jo').value.trim(),
-    fromLoc, toLoc, startDate, endDate,
-    vehicleId, plate,
+    reqName    : reqName,
+    reqEmpId   : document.getElementById('nt-req-empid').value.trim(),
+    tripType   : tripType,
+    purpose    : purpose,
+    relatedJo  : document.getElementById('nt-related-jo').value.trim(),
+    fromLoc    : fromLoc,
+    toLoc      : toLoc,
+    startDate  : startDate,
+    endDate    : endDate,
+    vehicleId  : vehicleId,
+    plate      : plate,
     driverEmpId: document.getElementById('nt-driver-empid').value.trim(),
-    driverName, status
+    driverName : driverName,
+    status     : status
   };
 
   google.script.run
@@ -329,11 +453,9 @@ function nt_saveTrip(status) {
       if (r.success) {
         o_toast('success', r.message);
         nt_reset();
-        // Force reload on all affected tabs
-        initializedTabs['trips']      = false;
-        initializedTabs['approval']   = false;
-        initializedTabs['dashboard']  = false;
-        // If user is already on trips tab, reload it now
+        initializedTabs['trips']     = false;
+        initializedTabs['approval']  = false;
+        initializedTabs['dashboard'] = false;
         var tripsPane = document.getElementById('tab-trips');
         if (tripsPane && tripsPane.classList.contains('active')) {
           init_trips();
