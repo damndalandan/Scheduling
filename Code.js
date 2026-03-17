@@ -277,6 +277,49 @@ function ops_isAdmin_(r)    { return r.toLowerCase().includes('admin'); }
 function ops_isApprover_(r) { return r.toLowerCase().includes('approver') || ops_isAdmin_(r); }
 function ops_isEncoder_(r)  { return r.toLowerCase().includes('encoder') || r.toLowerCase().includes('operator') || ops_isAdmin_(r); }
 
+
+
+// LOGIN — verifies email + password against LoginUsers sheet
+function ops_loginUser(email, password) {
+  try {
+    var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('LoginUsers');
+    if (!sh) return { success: false, message: 'LoginUsers sheet not found. Please contact admin.' };
+
+    var lr = sh.getLastRow();
+    if (lr < 2) return { success: false, message: 'No users registered yet.' };
+
+    // Read columns: A = Email, B = Password, C = Role
+    var data = sh.getRange(2, 1, lr - 1, 3).getValues();
+
+    var inputEmail = String(email || '').trim().toLowerCase();
+    var inputPw    = String(password || '').trim();
+
+    for (var i = 0; i < data.length; i++) {
+      var rowEmail = String(data[i][0] || '').trim().toLowerCase();
+      var rowPw    = String(data[i][1] || '').trim();
+      var rowRole  = String(data[i][2] || '').trim();
+
+      if (rowEmail === inputEmail) {
+        if (rowPw === inputPw) {
+          return {
+            success : true,
+            email   : rowEmail,
+            role    : rowRole || 'No Role',
+            message : 'Login successful.'
+          };
+        } else {
+          return { success: false, message: 'Incorrect password. Please try again.' };
+        }
+      }
+    }
+
+    return { success: false, message: 'Email not found. Please check your email or contact admin.' };
+  } catch(e) {
+    return { success: false, message: 'Login error: ' + e.message };
+  }
+}
+
+
 // ============================================================
 //  AUDIT LOG
 // ============================================================

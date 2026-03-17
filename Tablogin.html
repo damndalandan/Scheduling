@@ -1,0 +1,322 @@
+<!-- TabLogin.html — Login Screen -->
+<style>
+  #login-screen {
+    position: fixed;
+    inset: 0;
+    background: #0f1117;
+    z-index: 9000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    font-family: 'DM Sans', sans-serif;
+  }
+
+  .lg-card {
+    background: #181c27;
+    border: 1px solid #2a3045;
+    border-radius: 18px;
+    padding: 40px 36px 36px;
+    width: 100%;
+    max-width: 400px;
+    box-shadow: 0 24px 60px rgba(0,0,0,.7);
+    animation: lg-in .35s cubic-bezier(.22,1,.36,1);
+  }
+
+  @keyframes lg-in {
+    from { opacity: 0; transform: translateY(20px) scale(.97); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .lg-logo {
+    width: 52px; height: 52px;
+    background: #f5a623;
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 20px;
+    box-shadow: 0 8px 24px rgba(245,166,35,.3);
+  }
+
+  .lg-title {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -.03em;
+    color: #e8eaf0;
+    text-align: center;
+    margin-bottom: 4px;
+  }
+
+  .lg-subtitle {
+    font-size: 13px;
+    color: #555e78;
+    text-align: center;
+    margin-bottom: 32px;
+  }
+
+  .lg-label {
+    display: block;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    color: #555e78;
+    margin-bottom: 6px;
+  }
+
+  .lg-input-wrap {
+    margin-bottom: 16px;
+  }
+
+  .lg-input {
+    width: 100%;
+    background: #1f2535;
+    border: 1.5px solid #2a3045;
+    border-radius: 10px;
+    padding: 11px 14px;
+    color: #e8eaf0;
+    font-size: 14px;
+    font-family: 'DM Sans', sans-serif;
+    outline: none;
+    transition: border-color .15s, box-shadow .15s;
+    box-sizing: border-box;
+  }
+  .lg-input:focus {
+    border-color: #f5a623;
+    box-shadow: 0 0 0 3px rgba(245,166,35,.12);
+  }
+  .lg-input::placeholder { color: #555e78; }
+  .lg-input.error {
+    border-color: #ef4444 !important;
+    box-shadow: 0 0 0 3px rgba(239,68,68,.12) !important;
+  }
+
+  /* Password wrapper */
+  .lg-pw-wrap { position: relative; }
+  .lg-pw-toggle {
+    position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+    background: none; border: none; cursor: pointer;
+    color: #555e78; padding: 4px; line-height: 1;
+    transition: color .15s;
+  }
+  .lg-pw-toggle:hover { color: #f5a623; }
+  .lg-pw-wrap .lg-input { padding-right: 42px; }
+
+  /* Field error */
+  .lg-field-err {
+    display: none;
+    font-size: 12px;
+    font-weight: 600;
+    color: #ef4444;
+    margin-top: 5px;
+  }
+  .lg-field-err.show { display: block; }
+
+  /* Global alert banner */
+  .lg-alert {
+    display: none;
+    background: rgba(239,68,68,.1);
+    border: 1px solid rgba(239,68,68,.3);
+    border-radius: 10px;
+    padding: 11px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #ef4444;
+    margin-bottom: 18px;
+    text-align: center;
+  }
+  .lg-alert.show {
+    display: block;
+    animation: lg-shake .4s ease;
+  }
+
+  @keyframes lg-shake {
+    0%,100% { transform: translateX(0); }
+    20%      { transform: translateX(-6px); }
+    40%      { transform: translateX(6px); }
+    60%      { transform: translateX(-4px); }
+    80%      { transform: translateX(4px); }
+  }
+
+  /* Login button */
+  .lg-btn {
+    width: 100%;
+    padding: 12px;
+    border-radius: 10px;
+    border: none;
+    background: #f5a623;
+    color: #0f1117;
+    font-size: 14px;
+    font-weight: 800;
+    font-family: 'DM Sans', sans-serif;
+    cursor: pointer;
+    transition: background .15s, transform .1s;
+    letter-spacing: -.01em;
+    margin-top: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .lg-btn:hover  { background: #e8870a; }
+  .lg-btn:active { transform: scale(.98); }
+  .lg-btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+
+  .lg-spinner {
+    width: 14px; height: 14px;
+    border: 2px solid rgba(15,17,23,.3);
+    border-top-color: #0f1117;
+    border-radius: 50%;
+    animation: lg-spin .6s linear infinite;
+    display: none;
+  }
+  .lg-spinner.show { display: inline-block; }
+  @keyframes lg-spin { to { transform: rotate(360deg); } }
+
+  .lg-footer {
+    margin-top: 24px;
+    font-size: 11px;
+    color: #555e78;
+    text-align: center;
+  }
+</style>
+
+<div id="login-screen">
+  <div class="lg-card">
+
+    <!-- Logo -->
+    <div class="lg-logo">
+      <svg width="26" height="26" fill="none" stroke="#0f1117" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+              d="M8 7h12m0 0l-4-4m4 4l-4 4M4 17h12m0 0l-4-4m4 4l-4 4"/>
+      </svg>
+    </div>
+
+    <div class="lg-title">OPS Trip Monitor</div>
+    <div class="lg-subtitle">Ormoc Printshoppe — Fleet Management</div>
+
+    <!-- Global error alert -->
+    <div id="lg-alert" class="lg-alert"></div>
+
+    <!-- Email -->
+    <div class="lg-input-wrap">
+      <label class="lg-label">Email Address</label>
+      <input id="lg-email" class="lg-input" type="email"
+             placeholder="yourname@email.com"
+             autocomplete="email"
+             oninput="lg_clear('lg-email','lg-email-err')"
+             onkeydown="if(event.key==='Enter') document.getElementById('lg-password').focus()">
+      <div id="lg-email-err" class="lg-field-err">⚠ Please enter a valid email address.</div>
+    </div>
+
+    <!-- Password -->
+    <div class="lg-input-wrap lg-pw-wrap">
+      <label class="lg-label">Password</label>
+      <input id="lg-password" class="lg-input" type="password"
+             placeholder="Enter your password"
+             autocomplete="current-password"
+             oninput="lg_clear('lg-password','lg-pw-err')"
+             onkeydown="if(event.key==='Enter') lg_submit()">
+      <button class="lg-pw-toggle" type="button" onclick="lg_togglePw()" title="Show/hide password">
+        <svg id="lg-eye" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+        </svg>
+      </button>
+      <div id="lg-pw-err" class="lg-field-err">⚠ Please enter your password.</div>
+    </div>
+
+    <!-- Button -->
+    <button id="lg-btn" class="lg-btn" onclick="lg_submit()">
+      <span id="lg-spinner" class="lg-spinner"></span>
+      <span id="lg-btn-text">Sign In →</span>
+    </button>
+
+    <div class="lg-footer">OPS Trip Monitor v1.0 &nbsp;·&nbsp; Ormoc Printshoppe</div>
+  </div>
+</div>
+
+<script>
+var lg_pwVisible = false;
+
+function lg_togglePw() {
+  lg_pwVisible = !lg_pwVisible;
+  var inp = document.getElementById('lg-password');
+  inp.type = lg_pwVisible ? 'text' : 'password';
+  var eye = document.getElementById('lg-eye');
+  if (lg_pwVisible) {
+    eye.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>';
+  } else {
+    eye.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>';
+  }
+}
+
+function lg_clear(inputId, errId) {
+  document.getElementById(inputId).classList.remove('error');
+  document.getElementById(errId).classList.remove('show');
+  document.getElementById('lg-alert').classList.remove('show');
+}
+
+function lg_showAlert(msg) {
+  var el = document.getElementById('lg-alert');
+  el.textContent = '⛔  ' + msg;
+  el.classList.remove('show');
+  void el.offsetWidth;
+  el.classList.add('show');
+}
+
+function lg_setLoading(on) {
+  document.getElementById('lg-btn').disabled = on;
+  document.getElementById('lg-spinner').className = on ? 'lg-spinner show' : 'lg-spinner';
+  document.getElementById('lg-btn-text').textContent = on ? 'Signing in…' : 'Sign In →';
+}
+
+function lg_submit() {
+  var email = document.getElementById('lg-email').value.trim();
+  var pw    = document.getElementById('lg-password').value;
+  var err   = false;
+
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    document.getElementById('lg-email').classList.add('error');
+    document.getElementById('lg-email-err').classList.add('show');
+    err = true;
+  }
+  if (!pw) {
+    document.getElementById('lg-password').classList.add('error');
+    document.getElementById('lg-pw-err').classList.add('show');
+    err = true;
+  }
+  if (err) return;
+
+  lg_setLoading(true);
+
+  google.script.run
+    .withSuccessHandler(function(r) {
+      lg_setLoading(false);
+      if (r.success) {
+        var screen = document.getElementById('login-screen');
+        screen.style.transition = 'opacity .4s ease';
+        screen.style.opacity = '0';
+        setTimeout(function() {
+          screen.style.display = 'none';
+          document.getElementById('o-user-email').textContent  = r.email || '';
+          document.getElementById('o-user-avatar').textContent = (r.email || 'U').charAt(0).toUpperCase();
+          document.getElementById('o-role-badge').textContent  = r.role  || 'No Role';
+          switchTab('dashboard');
+          init_dashboard();
+        }, 400);
+      } else {
+        lg_showAlert(r.message || 'Incorrect email or password.');
+        document.getElementById('lg-email').classList.add('error');
+        document.getElementById('lg-password').classList.add('error');
+        document.getElementById('lg-password').value = '';
+      }
+    })
+    .withFailureHandler(function(e) {
+      lg_setLoading(false);
+      lg_showAlert('Connection error. Please try again.');
+    })
+    .ops_loginUser(email, pw);
+}
+</script>
