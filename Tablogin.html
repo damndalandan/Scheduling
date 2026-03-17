@@ -1,4 +1,4 @@
-<!-- TabLogin.html — Login Screen -->
+<!-- Tablogin.html — Login Screen -->
 <style>
   #login-screen {
     position: fixed;
@@ -90,7 +90,6 @@
     box-shadow: 0 0 0 3px rgba(239,68,68,.12) !important;
   }
 
-  /* Password wrapper */
   .lg-pw-wrap { position: relative; }
   .lg-pw-toggle {
     position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
@@ -101,7 +100,6 @@
   .lg-pw-toggle:hover { color: #f5a623; }
   .lg-pw-wrap .lg-input { padding-right: 42px; }
 
-  /* Field error */
   .lg-field-err {
     display: none;
     font-size: 12px;
@@ -111,7 +109,6 @@
   }
   .lg-field-err.show { display: block; }
 
-  /* Global alert banner */
   .lg-alert {
     display: none;
     background: rgba(239,68,68,.1);
@@ -137,7 +134,6 @@
     80%      { transform: translateX(4px); }
   }
 
-  /* Login button */
   .lg-btn {
     width: 100%;
     padding: 12px;
@@ -183,7 +179,6 @@
 <div id="login-screen">
   <div class="lg-card">
 
-    <!-- Logo -->
     <div class="lg-logo">
       <svg width="26" height="26" fill="none" stroke="#0f1117" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
@@ -192,9 +187,8 @@
     </div>
 
     <div class="lg-title">OPS Trip Monitor</div>
-    <div class="lg-subtitle">Ormoc Printshoppe — Fleet Management</div>
+    <div class="lg-subtitle">Ormoc Printshoppe &#8212; Fleet Management</div>
 
-    <!-- Global error alert -->
     <div id="lg-alert" class="lg-alert"></div>
 
     <!-- Email -->
@@ -205,7 +199,7 @@
              autocomplete="email"
              oninput="lg_clear('lg-email','lg-email-err')"
              onkeydown="if(event.key==='Enter') document.getElementById('lg-password').focus()">
-      <div id="lg-email-err" class="lg-field-err">⚠ Please enter a valid email address.</div>
+      <div id="lg-email-err" class="lg-field-err">&#9888; Please enter a valid email address.</div>
     </div>
 
     <!-- Password -->
@@ -224,16 +218,16 @@
                 d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
         </svg>
       </button>
-      <div id="lg-pw-err" class="lg-field-err">⚠ Please enter your password.</div>
+      <div id="lg-pw-err" class="lg-field-err">&#9888; Please enter your password.</div>
     </div>
 
     <!-- Button -->
     <button id="lg-btn" class="lg-btn" onclick="lg_submit()">
       <span id="lg-spinner" class="lg-spinner"></span>
-      <span id="lg-btn-text">Sign In →</span>
+      <span id="lg-btn-text">Sign In &#8594;</span>
     </button>
 
-    <div class="lg-footer">OPS Trip Monitor v1.0 &nbsp;·&nbsp; Ormoc Printshoppe</div>
+    <div class="lg-footer">OPS Trip Monitor v1.0 &nbsp;&#183;&nbsp; Ormoc Printshoppe</div>
   </div>
 </div>
 
@@ -260,7 +254,7 @@ function lg_clear(inputId, errId) {
 
 function lg_showAlert(msg) {
   var el = document.getElementById('lg-alert');
-  el.textContent = '⛔  ' + msg;
+  el.textContent = msg;
   el.classList.remove('show');
   void el.offsetWidth;
   el.classList.add('show');
@@ -269,7 +263,7 @@ function lg_showAlert(msg) {
 function lg_setLoading(on) {
   document.getElementById('lg-btn').disabled = on;
   document.getElementById('lg-spinner').className = on ? 'lg-spinner show' : 'lg-spinner';
-  document.getElementById('lg-btn-text').textContent = on ? 'Signing in…' : 'Sign In →';
+  document.getElementById('lg-btn-text').textContent = on ? 'Signing in\u2026' : 'Sign In \u2192';
 }
 
 function lg_submit() {
