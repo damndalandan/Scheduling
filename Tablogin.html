@@ -289,6 +289,10 @@ function lg_submit() {
     .withSuccessHandler(function(r) {
       lg_setLoading(false);
       if (r.success) {
+        // ✅ Save session
+        sessionStorage.setItem('ops_email', r.email || '');
+        sessionStorage.setItem('ops_role',  r.role  || 'No Role');
+
         var screen = document.getElementById('login-screen');
         screen.style.transition = 'opacity .4s ease';
         screen.style.opacity = '0';

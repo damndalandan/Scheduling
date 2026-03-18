@@ -420,22 +420,21 @@ function o_applyRoleUI(role) {
 function o_logout() {
   if (!confirm('Sign out ka ba?')) return;
 
-  // Restore all hidden nav items (in case driver was logged in)
+  // ✅ Clear session
+  sessionStorage.removeItem('ops_email');
+  sessionStorage.removeItem('ops_role');
+
   document.querySelectorAll('#o-sidebar .o-nav-item, #o-sidebar .o-nav-section, #o-sidebar .o-nav-divider')
     .forEach(function(el) { el.style.display = ''; });
-  // Re-hide driver-only nav item
   var driverNav = document.querySelector('.o-nav-item[data-tab="driver-dashboard"]');
   if (driverNav) driverNav.style.display = 'none';
 
-  // Clear navbar user info
   document.getElementById('o-user-email').textContent  = '';
   document.getElementById('o-user-avatar').textContent = 'U';
   document.getElementById('o-role-badge').textContent  = 'Loading\u2026';
 
-  // Reset all tab guards so everything reloads fresh on next login
   initializedTabs = {};
 
-  // Clear login form fields and errors
   var emailEl = document.getElementById('lg-email');
   var pwEl    = document.getElementById('lg-password');
   if (emailEl) { emailEl.value = ''; emailEl.classList.remove('error'); }
@@ -443,7 +442,6 @@ function o_logout() {
   var alertEl = document.getElementById('lg-alert');
   if (alertEl) alertEl.classList.remove('show');
 
-  // Fade login screen back in
   var screen = document.getElementById('login-screen');
   screen.style.opacity    = '0';
   screen.style.display    = 'flex';
@@ -452,6 +450,21 @@ function o_logout() {
 }
 
 // Boot is handled by TabLogin.html — lg_submit() calls switchTab + init_dashboard after login.
+
+// ✅ AUTO-RESTORE SESSION ON REFRESH
+(function() {
+  var savedEmail = sessionStorage.getItem('ops_email');
+  var savedRole  = sessionStorage.getItem('ops_role');
+  if (savedEmail && savedRole) {
+    var screen = document.getElementById('login-screen');
+    if (screen) screen.style.display = 'none';
+    document.getElementById('o-user-email').textContent  = savedEmail;
+    document.getElementById('o-user-avatar').textContent = savedEmail.charAt(0).toUpperCase();
+    document.getElementById('o-role-badge').textContent  = savedRole;
+    o_applyRoleUI(savedRole);
+  }
+})();
+
 </script>
 
 </body>
