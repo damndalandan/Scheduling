@@ -142,7 +142,7 @@ function ops_bootstrap() {
       name: 'Drivers',
        headers: ['Driver_ID','Full_Name','Employee_ID','License_ID',
             'License_Expiry','Contact_Number','Status','Notes',
-            'Created_At','Updated_At']
+            'Login_Email']
     },
   ];
 
@@ -1066,35 +1066,16 @@ const DRIVER_COL = {
   CONTACT        : 5,
   STATUS         : 6,
   NOTES          : 7,
-  CREATED_AT     : 8,
-  UPDATED_AT     : 9,
-  LOGIN_EMAIL    : 10  // ✅ Column K — store login email here
+  LOGIN_EMAIL    : 8
 };
 
 function ops_getAllDrivers_() {
   const sh = ops_sh_(OPS_SHEETS.DRIVERS);
   const lr = sh.getLastRow();
   if (lr < 2) return [];
-
-  // ✅ Load ALL driver emails from LoginUsers
-  var driverEmails = [];
-  try {
-    var loginSh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('LoginUsers');
-    if (loginSh && loginSh.getLastRow() >= 2) {
-      var loginData = loginSh.getRange(2, 1, loginSh.getLastRow() - 1, 3).getValues();
-      loginData.forEach(function(r) {
-        if (String(r[2]).toLowerCase().trim() === 'driver') {
-          driverEmails.push(String(r[0]).trim().toLowerCase());
-        }
-      });
-    }
-  } catch(e) {}
-
-  return sh.getRange(2, 1, lr - 1, 10).getValues()
+  return sh.getRange(2, 1, lr - 1, 9).getValues()
     .filter(function(r) { return r[DRIVER_COL.DRIVER_ID] && String(r[DRIVER_COL.DRIVER_ID]).trim(); })
-    .map(function(r, i) {
-      // ✅ Match login email by index (row position = driver position)
-      var loginEmail = driverEmails[i] || '';
+    .map(function(r) {
       return {
         driverId      : String(r[DRIVER_COL.DRIVER_ID]).trim(),
         name          : String(r[DRIVER_COL.NAME]           || '').trim(),
@@ -1104,13 +1085,10 @@ function ops_getAllDrivers_() {
         contact       : String(r[DRIVER_COL.CONTACT]        || '').trim(),
         status        : String(r[DRIVER_COL.STATUS]         || 'Active').trim(),
         notes         : String(r[DRIVER_COL.NOTES]          || '').trim(),
-        createdAt     : ops_fmtDT_(r[DRIVER_COL.CREATED_AT]),
-        updatedAt     : ops_fmtDT_(r[DRIVER_COL.UPDATED_AT]),
-        loginEmail    : String(r[DRIVER_COL.LOGIN_EMAIL] || '').trim()
+        loginEmail    : String(r[DRIVER_COL.LOGIN_EMAIL]    || '').trim()
       };
     });
 }
-
 function getDriversInitData() {
   try {
     const user    = ops_getUserInfo_();
@@ -1154,7 +1132,7 @@ function ops_addDriver(payload) {
     const id  = ops_genId_('D', drivers.map(function(d) { return [d.driverId]; }), 0);
     const now = new Date();
 
-    sh.getRange(sh.getLastRow() + 1, 1, 1, 11).setValues([[
+    sh.getRange(sh.getLastRow() + 1, 1, 1, 9).setValues([[
       id,
       payload.name.trim(),
       payload.empId         || '',
@@ -1163,7 +1141,6 @@ function ops_addDriver(payload) {
       payload.contact       || '',
       payload.status        || 'Active',
       payload.notes         || '',
-      now, now,
       payload.email.trim().toLowerCase()
     ]]);
 
@@ -1201,7 +1178,7 @@ function ops_updateDriver(payload) {
     });
     if (rowIdx === -1) return { success: false, message: 'Driver not found.' };
 
-    sh.getRange(rowIdx, 1, 1, 11).setValues([[
+    sh.getRange(rowIdx, 1, 1, 9).setValues([[
       payload.driverId,
       payload.name.trim(),
       payload.empId         || '',
@@ -1210,9 +1187,7 @@ function ops_updateDriver(payload) {
       payload.contact       || '',
       payload.status        || 'Active',
       payload.notes         || '',
-      data[rowIdx - 2][DRIVER_COL.CREATED_AT],
-      new Date(),
-      payload.email         || ''  // ✅ Column K — login email
+      payload.email         || ''
     ]]);
 
     // ✅ Update LoginUsers if email or password provided
