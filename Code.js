@@ -13,7 +13,8 @@ const OPS_SHEETS = {
   SETTINGS : 'Settings',
   RENEWALS : 'Renewal_Alerts',
   ROLES    : 'Role_Permissions',
-  AUDIT    : 'Audit_Log'
+  AUDIT    : 'Audit_Log',
+  DRIVERS  : 'Drivers',
 };
 
 // ============================================================
@@ -136,7 +137,13 @@ function ops_bootstrap() {
     {
       name: OPS_SHEETS.AUDIT,
       headers: ['DateTime','Action','User','Role','Payload']
-    }
+    },
+    {
+      name: 'Drivers',
+       headers: ['Driver_ID','Full_Name','Employee_ID','License_ID',
+            'License_Expiry','Contact_Number','Status','Notes',
+            'Created_At','Updated_At']
+    },
   ];
 
   schemas.forEach(function(s) {
@@ -1043,4 +1050,137 @@ function ops_buildReports_(trips, vehicles) {
   });
 
   return { byVehicle, byDriver, byType, mileageSummary };
+}
+
+// ============================================================
+//  DRIVERS — CRUD
+//  I-paste kini sa PINAKA-UBOS sa Code.js
+// ============================================================
+
+const DRIVER_COL = {
+  DRIVER_ID      : 0,
+  NAME           : 1,
+  EMP_ID         : 2,
+  LICENSE_ID     : 3,
+  LICENSE_EXPIRY : 4,
+  CONTACT        : 5,
+  STATUS         : 6,
+  NOTES          : 7,
+  CREATED_AT     : 8,
+  UPDATED_AT     : 9
+};
+
+function ops_getAllDrivers_() {
+  const sh = ops_sh_(OPS_SHEETS.DRIVERS);
+  const lr = sh.getLastRow();
+  if (lr < 2) return [];
+  return sh.getRange(2, 1, lr - 1, 10).getValues()
+    .filter(function(r) { return r[DRIVER_COL.DRIVER_ID] && String(r[DRIVER_COL.DRIVER_ID]).trim(); })
+    .map(function(r) {
+      return {
+        driverId      : String(r[DRIVER_COL.DRIVER_ID]).trim(),
+        name          : String(r[DRIVER_COL.NAME]           || '').trim(),
+        empId         : String(r[DRIVER_COL.EMP_ID]         || '').trim(),
+        licenseId     : String(r[DRIVER_COL.LICENSE_ID]     || '').trim(),
+        licenseExpiry : ops_fmtDate_(r[DRIVER_COL.LICENSE_EXPIRY]),
+        contact       : String(r[DRIVER_COL.CONTACT]        || '').trim(),
+        status        : String(r[DRIVER_COL.STATUS]         || 'Active').trim(),
+        notes         : String(r[DRIVER_COL.NOTES]          || '').trim(),
+        createdAt     : ops_fmtDT_(r[DRIVER_COL.CREATED_AT]),
+        updatedAt     : ops_fmtDT_(r[DRIVER_COL.UPDATED_AT])
+      };
+    });
+}
+
+function getDriversInitData() {
+  try {
+    const user    = ops_getUserInfo_();
+    const drivers = ops_getAllDrivers_();
+    return { success: true, user, drivers };
+  } catch(e) { return { success: false, message: e.message }; }
+}
+
+function ops_addDriver(payload) {
+  try {
+    const user = ops_getUserInfo_();
+    if (!ops_isAdmin_(user.role) && !ops_isEncoder_(user.role))
+      return { success: false, message: 'Access denied.' };
+    if (!payload.name)      return { success: false, message: 'Full Name required.' };
+    if (!payload.licenseId) return { success: false, message: 'Driver License ID required.' };
+    const drivers = ops_getAllDrivers_();
+    if (drivers.some(function(d) {
+      return d.licenseId.toLowerCase() === payload.licenseId.trim().toLowerCase();
+    })) return { success: false, message: 'License ID "' + payload.licenseId + '" already exists.' };
+    const sh  = ops_sh_(OPS_SHEETS.DRIVERS);
+    const id  = ops_genId_('D', drivers.map(function(d) { return [d.driverId]; }), 0);
+    const now = new Date();
+    sh.getRange(sh.getLastRow() + 1, 1, 1, 10).setValues([[
+      id,
+      payload.name.trim(),
+      payload.empId         || '',
+      payload.licenseId.trim().toUpperCase(),
+      payload.licenseExpiry || '',
+      payload.contact       || '',
+      payload.status        || 'Active',
+      payload.notes         || '',
+      now, now
+    ]]);
+    ops_audit_('OPS_ADD_DRIVER', { driverId: id, name: payload.name, by: user.email });
+    return { success: true, message: 'Driver ' + id + ' added.', driverId: id };
+  } catch(e) { return { success: false, message: e.message }; }
+}
+
+function ops_updateDriver(payload) {
+  try {
+    const user = ops_getUserInfo_();
+    if (!ops_isAdmin_(user.role) && !ops_isEncoder_(user.role))
+      return { success: false, message: 'Access denied.' };
+    if (!payload.driverId)  return { success: false, message: 'Driver ID required.' };
+    if (!payload.name)      return { success: false, message: 'Full Name required.' };
+    if (!payload.licenseId) return { success: false, message: 'Driver License ID required.' };
+    const sh   = ops_sh_(OPS_SHEETS.DRIVERS);
+    const lr   = sh.getLastRow();
+    if (lr < 2) return { success: false, message: 'No drivers found.' };
+    const data = sh.getRange(2, 1, lr - 1, 10).getValues();
+    let rowIdx = -1;
+    data.forEach(function(r, i) {
+      if (String(r[DRIVER_COL.DRIVER_ID]).trim() === payload.driverId) rowIdx = i + 2;
+    });
+    if (rowIdx === -1) return { success: false, message: 'Driver not found.' };
+    sh.getRange(rowIdx, 1, 1, 10).setValues([[
+      payload.driverId,
+      payload.name.trim(),
+      payload.empId         || '',
+      payload.licenseId.trim().toUpperCase(),
+      payload.licenseExpiry || '',
+      payload.contact       || '',
+      payload.status        || 'Active',
+      payload.notes         || '',
+      data[rowIdx - 2][DRIVER_COL.CREATED_AT],
+      new Date()
+    ]]);
+    ops_audit_('OPS_UPDATE_DRIVER', { driverId: payload.driverId, by: user.email });
+    return { success: true, message: 'Driver ' + payload.driverId + ' updated.' };
+  } catch(e) { return { success: false, message: e.message }; }
+}
+
+function ops_deleteDriver(driverId) {
+  try {
+    const user = ops_getUserInfo_();
+    if (!ops_isAdmin_(user.role))
+      return { success: false, message: 'Admin access required to delete drivers.' };
+    if (!driverId) return { success: false, message: 'Driver ID required.' };
+    const sh = ops_sh_(OPS_SHEETS.DRIVERS);
+    const lr = sh.getLastRow();
+    if (lr < 2) return { success: false, message: 'No drivers found.' };
+    const data = sh.getRange(2, 1, lr - 1, 1).getValues();
+    let rowIdx = -1;
+    for (let i = 0; i < data.length; i++) {
+      if (String(data[i][0]).trim() === driverId) { rowIdx = i + 2; break; }
+    }
+    if (rowIdx === -1) return { success: false, message: 'Driver ' + driverId + ' not found.' };
+    sh.deleteRow(rowIdx);
+    ops_audit_('OPS_DELETE_DRIVER', { driverId, by: user.email });
+    return { success: true, message: 'Driver ' + driverId + ' permanently deleted.' };
+  } catch(e) { return { success: false, message: e.message }; }
 }
