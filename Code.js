@@ -9,7 +9,6 @@
 // ============================================================
 const OPS_SHEETS = {
   VEHICLES : 'Vehicles',
-  DRIVERS  : 'Drivers',
   TRIPS    : 'Trips',
   SETTINGS : 'Settings',
   RENEWALS : 'Renewal_Alerts',
@@ -36,20 +35,6 @@ const VEH_COL = {
   NOTES         : 10,
   CREATED_AT    : 11,
   UPDATED_AT    : 12
-};
-
-// Drivers  A-J
-const DRIVER_COL = {
-  DRIVER_ID      : 0,
-  NAME           : 1,
-  EMP_ID         : 2,
-  LICENSE_ID     : 3,
-  LICENSE_EXPIRY : 4,
-  CONTACT        : 5,
-  STATUS         : 6,
-  NOTES          : 7,
-  CREATED_AT     : 8,
-  UPDATED_AT     : 9
 };
 
 // Trips  A-AC
@@ -131,12 +116,6 @@ function ops_bootstrap() {
                 'LTO_Expiry','LTO_PDF_Link','Notes','Created_At','Updated_At']
     },
     {
-      name: OPS_SHEETS.DRIVERS,
-      headers: ['Driver_ID','Full_Name','Employee_ID','License_ID',
-                'License_Expiry','Contact_Number','Status','Notes',
-                'Created_At','Updated_At']
-    },
-    {
       name: OPS_SHEETS.TRIPS,
       headers: ['Trip_ID','Request_Date','Requestor_EmpID','Requestor_Name',
                 'Trip_Type','Purpose','Related_JO','From_Location','To_Location',
@@ -199,7 +178,11 @@ function ops_fmtDate_(val) {
   try {
     var s = String(val).trim();
     if (!s || s === '0' || s === '') return '';
+
+    // Already YYYY-MM-DD string — return as-is (from HTML date input)
     if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+
+    // GAS Date object — use local getters to avoid UTC shift
     var d = (val instanceof Date) ? val : new Date(s);
     if (isNaN(d.getTime())) return '';
     var year = d.getFullYear();
@@ -226,6 +209,7 @@ function ops_fmtDT_(val) {
 function ops_daysLeft_(dateStr) {
   if (!dateStr || dateStr === '') return null;
   try {
+    // dateStr is YYYY-MM-DD from ops_fmtDate_
     var parts = String(dateStr).split('-');
     if (parts.length !== 3) return null;
     var expiry = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
@@ -235,7 +219,7 @@ function ops_daysLeft_(dateStr) {
   } catch(e) { return null; }
 }
 
-// DEBUG HELPER — run in GAS editor to check raw sheet values
+// DEBUG HELPER — run this in GAS editor to check raw sheet values
 function ops_debugVehicles() {
   var sh = ops_sh_(OPS_SHEETS.VEHICLES);
   var lr = sh.getLastRow();
@@ -293,6 +277,49 @@ function ops_isAdmin_(r)    { return r.toLowerCase().includes('admin'); }
 function ops_isApprover_(r) { return r.toLowerCase().includes('approver') || ops_isAdmin_(r); }
 function ops_isEncoder_(r)  { return r.toLowerCase().includes('encoder') || r.toLowerCase().includes('operator') || ops_isAdmin_(r); }
 
+
+
+// LOGIN — verifies email + password against LoginUsers sheet
+function ops_loginUser(email, password) {
+  try {
+    var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('LoginUsers');
+    if (!sh) return { success: false, message: 'LoginUsers sheet not found. Please contact admin.' };
+
+    var lr = sh.getLastRow();
+    if (lr < 2) return { success: false, message: 'No users registered yet.' };
+
+    // Read columns: A = Email, B = Password, C = Role
+    var data = sh.getRange(2, 1, lr - 1, 3).getValues();
+
+    var inputEmail = String(email || '').trim().toLowerCase();
+    var inputPw    = String(password || '').trim();
+
+    for (var i = 0; i < data.length; i++) {
+      var rowEmail = String(data[i][0] || '').trim().toLowerCase();
+      var rowPw    = String(data[i][1] || '').trim();
+      var rowRole  = String(data[i][2] || '').trim();
+
+      if (rowEmail === inputEmail) {
+        if (rowPw === inputPw) {
+          return {
+            success : true,
+            email   : rowEmail,
+            role    : rowRole || 'No Role',
+            message : 'Login successful.'
+          };
+        } else {
+          return { success: false, message: 'Incorrect password. Please try again.' };
+        }
+      }
+    }
+
+    return { success: false, message: 'Email not found. Please check your email or contact admin.' };
+  } catch(e) {
+    return { success: false, message: 'Login error: ' + e.message };
+  }
+}
+
+
 // ============================================================
 //  AUDIT LOG
 // ============================================================
@@ -323,7 +350,10 @@ function ops_getSettings_() {
 }
 
 // ============================================================
-//  DATABASE LINK HELPER
+//  JO DATABASE — fetch from external linked spreadsheet
+// ============================================================
+// ============================================================
+//  DATABASE LINK HELPER — extracts Spreadsheet ID from DatabaseLink sheet
 // ============================================================
 function ops_getDBId_(label) {
   const ss        = SpreadsheetApp.getActiveSpreadsheet();
@@ -342,47 +372,76 @@ function ops_getDBId_(label) {
   return match[1];
 }
 
-// ============================================================
-//  JO DATABASE
-// ============================================================
 function ops_getJOList() {
   try {
+    // 1. Get JODatabase spreadsheet ID from DatabaseLink sheet
     let joDbId;
     try {
       joDbId = ops_getDBId_('JODatabase');
     } catch(e) {
       return { success: false, message: 'DatabaseLink error: ' + e.message };
     }
+
+    // 2. Open external spreadsheet by ID — more reliable than openByUrl
     let extSS;
     try {
       extSS = SpreadsheetApp.openById(joDbId);
     } catch(e) {
       return { success: false, message: 'Cannot open JODatabase (ID: ' + joDbId + '). Check sharing permissions: ' + e.message };
     }
+
+    // 3. Get Line-up JOs sheet
     const joSh = extSS.getSheetByName('Line-up JOs');
     if (!joSh) {
       const shNames = extSS.getSheets().map(function(s) { return s.getName(); });
       return { success: false, message: '"Line-up JOs" not found. Available sheets: ' + shNames.join(', ') };
     }
+
+    // 4. Read Column I (index 8) = Job Description, Column L (index 11) = JO Number
     const lr = joSh.getLastRow();
     if (lr < 2) return { success: true, data: [] };
-    const data = joSh.getRange(2, 1, lr - 1, 12).getValues();
+
+    const data = joSh.getRange(2, 1, lr - 1, 12).getValues(); // cols A–L
+
     const list = [];
     data.forEach(function(r) {
-      const joNumber = String(r[11] || '').trim();
-      const jobDesc  = String(r[8]  || '').trim();
+      const joNumber = String(r[11] || '').trim(); // Column L
+      const jobDesc  = String(r[8]  || '').trim(); // Column I
       if (joNumber) list.push({ joNumber: joNumber, jobDesc: jobDesc });
     });
+
     return { success: true, data: list };
   } catch(e) {
     return { success: false, message: 'ops_getJOList error: ' + e.message };
   }
 }
 
+function ops_getEmployeeList() {
+  try {
+    var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('EmployeName');
+    if (!sh) return { success: false, message: 'EmployeName sheet not found.' };
+    var lr = sh.getLastRow();
+    if (lr < 2) return { success: true, data: [] };
+    var data = sh.getRange(2, 1, lr - 1, 3).getValues();
+    var list = [];
+    data.forEach(function(r) {
+      var empId   = String(r[0] || '').trim(); // Column A: Employee Code
+      var team    = String(r[1] || '').trim(); // Column B: Team
+      var empName = String(r[2] || '').trim(); // Column C: Name of Employee
+      if (empName) list.push({ empId: empId, empName: empName, team: team });
+    });
+    return { success: true, data: list };
+  } catch(e) {
+    return { success: false, message: 'ops_getEmployeeList error: ' + e.message };
+  }
+}
+
+
 // ============================================================
 //  COMBINED INIT DATA (one call per tab)
 // ============================================================
 
+// Dashboard init — stats + recent trips + renewal alerts
 function getDashboardInitData() {
   try {
     const user     = ops_getUserInfo_();
@@ -390,6 +449,7 @@ function getDashboardInitData() {
     const vehicles = ops_getAllVehicles_();
     const settings = ops_getSettings_();
     const alertDays= parseInt(settings.renewal_alert_days) || 30;
+
     const stats = {
       total    : trips.length,
       pending  : trips.filter(function(t) { return t.status === TRIP_STATUS.SUBMITTED; }).length,
@@ -397,25 +457,112 @@ function getDashboardInitData() {
       completed: trips.filter(function(t) { return t.status === TRIP_STATUS.COMPLETED; }).length,
       vehicles : vehicles.filter(function(v) { return v.status === VEH_STATUS.ACTIVE; }).length
     };
+
     const recent = trips.slice(-5).reverse();
     const alerts = ops_buildRenewalAlerts_(vehicles, alertDays);
+
     return { success: true, user, stats, recent, alerts, settings };
   } catch(e) { return { success: false, message: e.message }; }
 }
 
+// Trips tab init — trips + vehicles (for dropdown)
 function getTripsInitData() {
   try {
-    const user     = ops_getUserInfo_();
-    const trips    = ops_getAllTrips_();
-    const vehicles = ops_getAllVehicles_();
-    const drivers  = ops_getAllDrivers_();
-    const joResult = ops_getJOList();
-    const joList   = joResult.success ? joResult.data : [];
-    const joError  = joResult.success ? null : joResult.message;
-    return { success: true, user, trips, vehicles, drivers, joList, joError };
+    var user      = ops_getUserInfo_();
+    var trips     = ops_getAllTrips_();
+    var vehicles  = ops_getAllVehicles_();
+    var joResult  = ops_getJOList();
+    var empResult = ops_getEmployeeList();
+    var joList    = joResult.success  ? joResult.data  : [];
+    var joError   = joResult.success  ? null            : joResult.message;
+    var empList   = empResult.success ? empResult.data : [];
+    return { success: true, user: user, trips: trips, vehicles: vehicles, joList: joList, joError: joError, empList: empList };
   } catch(e) { return { success: false, message: e.message }; }
 }
 
+// ============================================================
+//  DRIVER DASHBOARD — I-PASTE SA Code.js
+//  (i-add after getTripsInitData function)
+// ============================================================
+
+// Returns trips assigned to the logged-in driver
+function getDriverDashboardData() {
+  try {
+    var user  = ops_getUserInfo_();
+    var email = user.email.toLowerCase();
+    var allTrips = ops_getAllTrips_();
+
+    // Filter trips where driverEmpId matches email OR driver name contains part of email
+    var myTrips = allTrips.filter(function(t) {
+      var dEmpId = (t.driverEmpId || '').toLowerCase().trim();
+      return dEmpId === email;
+    });
+
+    // Fallback: if no exact email match, return all trips assigned to any driver
+    // (for name-based systems where driverEmpId is not an email)
+    // Admin can configure driverEmpId to store email for precise filtering
+
+    return {
+      success     : true,
+      trips       : myTrips,
+      driverEmail : email,
+      user        : user
+    };
+  } catch(e) {
+    return { success: false, message: e.message };
+  }
+}
+
+// Driver completes a trip — same as ops_completeTrip but allows driver role
+function ops_driverCompleteTrip(payload) {
+  try {
+    var user = ops_getUserInfo_();
+
+    // Allow driver role in addition to encoder/admin
+    var role = (user.role || '').toLowerCase();
+    if (!ops_isEncoder_(user.role) && role !== 'driver') {
+      return { success: false, message: 'Access denied. Driver or Encoder role required.' };
+    }
+
+    if (!payload.tripId)      return { success: false, message: 'Trip ID required.' };
+    if (!payload.actualStart) return { success: false, message: 'Actual Start required.' };
+    if (!payload.actualEnd)   return { success: false, message: 'Actual End required.' };
+
+    var startKm = parseFloat(payload.startKm) || 0;
+    var endKm   = parseFloat(payload.endKm)   || 0;
+    if (endKm < startKm) return { success: false, message: 'End mileage cannot be less than start mileage.' };
+
+    var row = ops_getTripRow_(payload.tripId);
+    if (!row) return { success: false, message: 'Trip not found.' };
+    if (row.data[TRIP_COL.STATUS] !== TRIP_STATUS.APPROVED) {
+      return { success: false, message: 'Trip must be Approved before completing.' };
+    }
+
+    var distance = endKm - startKm;
+    var sh  = ops_sh_(OPS_SHEETS.TRIPS);
+    var now = new Date();
+
+    sh.getRange(row.idx, TRIP_COL.STATUS       + 1).setValue(TRIP_STATUS.COMPLETED);
+    sh.getRange(row.idx, TRIP_COL.ACTUAL_START  + 1).setValue(payload.actualStart);
+    sh.getRange(row.idx, TRIP_COL.ACTUAL_END    + 1).setValue(payload.actualEnd);
+    sh.getRange(row.idx, TRIP_COL.START_KM      + 1).setValue(startKm);
+    sh.getRange(row.idx, TRIP_COL.END_KM        + 1).setValue(endKm);
+    sh.getRange(row.idx, TRIP_COL.DISTANCE      + 1).setValue(distance);
+    sh.getRange(row.idx, TRIP_COL.REMARKS       + 1).setValue(payload.remarks || '');
+    sh.getRange(row.idx, TRIP_COL.UPDATED_AT    + 1).setValue(now);
+    sh.getRange(row.idx, TRIP_COL.UPDATED_BY    + 1).setValue(user.email);
+
+    ops_audit_('DRIVER_COMPLETE_TRIP', { tripId: payload.tripId, distance: distance, by: user.email });
+    return {
+      success  : true,
+      message  : 'Trip ' + payload.tripId + ' completed! Distance: ' + distance + ' km.'
+    };
+  } catch(e) {
+    return { success: false, message: e.message };
+  }
+}
+
+// Vehicles tab init
 function getVehiclesInitData() {
   try {
     const user     = ops_getUserInfo_();
@@ -424,14 +571,7 @@ function getVehiclesInitData() {
   } catch(e) { return { success: false, message: e.message }; }
 }
 
-function getDriversInitData() {
-  try {
-    const user    = ops_getUserInfo_();
-    const drivers = ops_getAllDrivers_();
-    return { success: true, user, drivers };
-  } catch(e) { return { success: false, message: e.message }; }
-}
-
+// Approval tab init — submitted trips only
 function getApprovalInitData() {
   try {
     const user  = ops_getUserInfo_();
@@ -442,6 +582,7 @@ function getApprovalInitData() {
   } catch(e) { return { success: false, message: e.message }; }
 }
 
+// Completion tab init — approved trips only
 function getCompletionInitData() {
   try {
     const user  = ops_getUserInfo_();
@@ -452,6 +593,7 @@ function getCompletionInitData() {
   } catch(e) { return { success: false, message: e.message }; }
 }
 
+// Renewals tab init
 function getRenewalsInitData() {
   try {
     const user     = ops_getUserInfo_();
@@ -463,6 +605,7 @@ function getRenewalsInitData() {
   } catch(e) { return { success: false, message: e.message }; }
 }
 
+// Reports tab init
 function getReportsInitData() {
   try {
     const user     = ops_getUserInfo_();
@@ -509,12 +652,15 @@ function ops_addVehicle(payload) {
       return { success: false, message: 'Access denied.' };
     if (!payload.plate || !payload.type)
       return { success: false, message: 'Plate Number and Vehicle Type are required.' };
+
     const vehicles = ops_getAllVehicles_();
     if (vehicles.some(function(v) { return v.plate.toLowerCase() === payload.plate.trim().toLowerCase(); }))
       return { success: false, message: 'Plate number "' + payload.plate + '" already exists.' };
+
     const sh  = ops_sh_(OPS_SHEETS.VEHICLES);
     const id  = ops_genId_('V', vehicles.map(function(v) { return [v.vehicleId]; }), 0);
     const now = new Date();
+
     sh.getRange(sh.getLastRow() + 1, 1, 1, 13).setValues([[
       id,
       payload.plate.trim().toUpperCase(),
@@ -529,6 +675,7 @@ function ops_addVehicle(payload) {
       payload.notes    || '',
       now, now
     ]]);
+
     ops_audit_('OPS_ADD_VEHICLE', { vehicleId: id, plate: payload.plate, by: user.email });
     return { success: true, message: 'Vehicle ' + id + ' added.', vehicleId: id };
   } catch(e) { return { success: false, message: e.message }; }
@@ -540,6 +687,7 @@ function ops_updateVehicle(payload) {
     if (!ops_isAdmin_(user.role) && !ops_isEncoder_(user.role))
       return { success: false, message: 'Access denied.' };
     if (!payload.vehicleId) return { success: false, message: 'Vehicle ID required.' };
+
     const sh  = ops_sh_(OPS_SHEETS.VEHICLES);
     const lr  = sh.getLastRow();
     const data= sh.getRange(2, 1, lr - 1, 13).getValues();
@@ -548,6 +696,7 @@ function ops_updateVehicle(payload) {
       if (String(r[VEH_COL.VEHICLE_ID]).trim() === payload.vehicleId) rowIdx = i + 2;
     });
     if (rowIdx === -1) return { success: false, message: 'Vehicle not found.' };
+
     sh.getRange(rowIdx, 1, 1, 13).setValues([[
       payload.vehicleId,
       payload.plate.trim().toUpperCase(),
@@ -563,6 +712,7 @@ function ops_updateVehicle(payload) {
       data[rowIdx - 2][VEH_COL.CREATED_AT],
       new Date()
     ]]);
+
     ops_audit_('OPS_UPDATE_VEHICLE', { vehicleId: payload.vehicleId, by: user.email });
     return { success: true, message: 'Vehicle ' + payload.vehicleId + ' updated.' };
   } catch(e) { return { success: false, message: e.message }; }
@@ -574,128 +724,21 @@ function ops_deleteVehicle(vehicleId) {
     if (!ops_isAdmin_(user.role))
       return { success: false, message: 'Admin access required to delete vehicles.' };
     if (!vehicleId) return { success: false, message: 'Vehicle ID required.' };
+
     const sh = ops_sh_(OPS_SHEETS.VEHICLES);
     const lr = sh.getLastRow();
     if (lr < 2) return { success: false, message: 'No vehicles found.' };
+
     const data = sh.getRange(2, 1, lr - 1, 1).getValues();
     let rowIdx = -1;
     for (let i = 0; i < data.length; i++) {
       if (String(data[i][0]).trim() === vehicleId) { rowIdx = i + 2; break; }
     }
     if (rowIdx === -1) return { success: false, message: 'Vehicle ' + vehicleId + ' not found.' };
+
     sh.deleteRow(rowIdx);
     ops_audit_('OPS_DELETE_VEHICLE', { vehicleId, by: user.email });
     return { success: true, message: 'Vehicle ' + vehicleId + ' permanently deleted.' };
-  } catch(e) { return { success: false, message: e.message }; }
-}
-
-// ============================================================
-//  DRIVERS — CRUD
-// ============================================================
-function ops_getAllDrivers_() {
-  const sh = ops_sh_(OPS_SHEETS.DRIVERS);
-  const lr = sh.getLastRow();
-  if (lr < 2) return [];
-  return sh.getRange(2, 1, lr - 1, 10).getValues()
-    .filter(function(r) { return r[DRIVER_COL.DRIVER_ID] && String(r[DRIVER_COL.DRIVER_ID]).trim(); })
-    .map(function(r) {
-      return {
-        driverId      : String(r[DRIVER_COL.DRIVER_ID]).trim(),
-        name          : String(r[DRIVER_COL.NAME]           || '').trim(),
-        empId         : String(r[DRIVER_COL.EMP_ID]         || '').trim(),
-        licenseId     : String(r[DRIVER_COL.LICENSE_ID]     || '').trim(),
-        licenseExpiry : ops_fmtDate_(r[DRIVER_COL.LICENSE_EXPIRY]),
-        contact       : String(r[DRIVER_COL.CONTACT]        || '').trim(),
-        status        : String(r[DRIVER_COL.STATUS]         || 'Active').trim(),
-        notes         : String(r[DRIVER_COL.NOTES]          || '').trim(),
-        createdAt     : ops_fmtDT_(r[DRIVER_COL.CREATED_AT]),
-        updatedAt     : ops_fmtDT_(r[DRIVER_COL.UPDATED_AT])
-      };
-    });
-}
-
-function ops_addDriver(payload) {
-  try {
-    const user = ops_getUserInfo_();
-    if (!ops_isAdmin_(user.role) && !ops_isEncoder_(user.role))
-      return { success: false, message: 'Access denied.' };
-    if (!payload.name)      return { success: false, message: 'Full Name required.' };
-    if (!payload.licenseId) return { success: false, message: 'Driver License ID required.' };
-    const drivers = ops_getAllDrivers_();
-    if (drivers.some(function(d) {
-      return d.licenseId.toLowerCase() === payload.licenseId.trim().toLowerCase();
-    })) return { success: false, message: 'License ID "' + payload.licenseId + '" already exists.' };
-    const sh  = ops_sh_(OPS_SHEETS.DRIVERS);
-    const id  = ops_genId_('D', drivers.map(function(d) { return [d.driverId]; }), 0);
-    const now = new Date();
-    sh.getRange(sh.getLastRow() + 1, 1, 1, 10).setValues([[
-      id,
-      payload.name.trim(),
-      payload.empId         || '',
-      payload.licenseId.trim().toUpperCase(),
-      payload.licenseExpiry || '',
-      payload.contact       || '',
-      payload.status        || 'Active',
-      payload.notes         || '',
-      now, now
-    ]]);
-    ops_audit_('OPS_ADD_DRIVER', { driverId: id, name: payload.name, by: user.email });
-    return { success: true, message: 'Driver ' + id + ' added.', driverId: id };
-  } catch(e) { return { success: false, message: e.message }; }
-}
-
-function ops_updateDriver(payload) {
-  try {
-    const user = ops_getUserInfo_();
-    if (!ops_isAdmin_(user.role) && !ops_isEncoder_(user.role))
-      return { success: false, message: 'Access denied.' };
-    if (!payload.driverId)  return { success: false, message: 'Driver ID required.' };
-    if (!payload.name)      return { success: false, message: 'Full Name required.' };
-    if (!payload.licenseId) return { success: false, message: 'Driver License ID required.' };
-    const sh   = ops_sh_(OPS_SHEETS.DRIVERS);
-    const lr   = sh.getLastRow();
-    if (lr < 2) return { success: false, message: 'No drivers found.' };
-    const data = sh.getRange(2, 1, lr - 1, 10).getValues();
-    let rowIdx = -1;
-    data.forEach(function(r, i) {
-      if (String(r[DRIVER_COL.DRIVER_ID]).trim() === payload.driverId) rowIdx = i + 2;
-    });
-    if (rowIdx === -1) return { success: false, message: 'Driver not found.' };
-    sh.getRange(rowIdx, 1, 1, 10).setValues([[
-      payload.driverId,
-      payload.name.trim(),
-      payload.empId         || '',
-      payload.licenseId.trim().toUpperCase(),
-      payload.licenseExpiry || '',
-      payload.contact       || '',
-      payload.status        || 'Active',
-      payload.notes         || '',
-      data[rowIdx - 2][DRIVER_COL.CREATED_AT],
-      new Date()
-    ]]);
-    ops_audit_('OPS_UPDATE_DRIVER', { driverId: payload.driverId, by: user.email });
-    return { success: true, message: 'Driver ' + payload.driverId + ' updated.' };
-  } catch(e) { return { success: false, message: e.message }; }
-}
-
-function ops_deleteDriver(driverId) {
-  try {
-    const user = ops_getUserInfo_();
-    if (!ops_isAdmin_(user.role))
-      return { success: false, message: 'Admin access required to delete drivers.' };
-    if (!driverId) return { success: false, message: 'Driver ID required.' };
-    const sh = ops_sh_(OPS_SHEETS.DRIVERS);
-    const lr = sh.getLastRow();
-    if (lr < 2) return { success: false, message: 'No drivers found.' };
-    const data = sh.getRange(2, 1, lr - 1, 1).getValues();
-    let rowIdx = -1;
-    for (let i = 0; i < data.length; i++) {
-      if (String(data[i][0]).trim() === driverId) { rowIdx = i + 2; break; }
-    }
-    if (rowIdx === -1) return { success: false, message: 'Driver ' + driverId + ' not found.' };
-    sh.deleteRow(rowIdx);
-    ops_audit_('OPS_DELETE_DRIVER', { driverId, by: user.email });
-    return { success: true, message: 'Driver ' + driverId + ' permanently deleted.' };
   } catch(e) { return { success: false, message: e.message }; }
 }
 
@@ -747,6 +790,7 @@ function ops_getAllTrips_() {
 function ops_saveTrip(payload) {
   try {
     const user = ops_getUserInfo_();
+    // Validate required fields
     if (!payload.reqName)   return { success: false, message: 'Requestor Name required.' };
     if (!payload.tripType)  return { success: false, message: 'Trip Type required.' };
     if (!payload.purpose)   return { success: false, message: 'Purpose required.' };
@@ -754,14 +798,18 @@ function ops_saveTrip(payload) {
     if (!payload.toLoc)     return { success: false, message: 'To Location required.' };
     if (!payload.startDate) return { success: false, message: 'Planned Start required.' };
     if (!payload.endDate)   return { success: false, message: 'Planned End required.' };
+
+    // Extra validation if submitting
     if (payload.status === TRIP_STATUS.SUBMITTED) {
       if (!payload.vehicleId) return { success: false, message: 'Vehicle required to submit.' };
       if (!payload.driverName)return { success: false, message: 'Driver required to submit.' };
     }
+
     const trips = ops_getAllTrips_();
     const sh    = ops_sh_(OPS_SHEETS.TRIPS);
     const id    = ops_genId_('T', trips.map(function(t) { return [t.tripId]; }), 0);
     const now   = new Date();
+
     sh.getRange(sh.getLastRow() + 1, 1, 1, 29).setValues([[
       id, now,
       payload.reqEmpId   || '',
@@ -783,6 +831,7 @@ function ops_saveTrip(payload) {
       payload.remarks    || '',
       now, user.email
     ]]);
+
     ops_audit_('OPS_SAVE_TRIP', { tripId: id, status: payload.status, by: user.email });
     return { success: true, message: 'Trip ' + id + ' saved as ' + payload.status + '.', tripId: id };
   } catch(e) { return { success: false, message: e.message }; }
@@ -793,10 +842,12 @@ function ops_approveTrip(tripId) {
     const user = ops_getUserInfo_();
     if (!ops_isApprover_(user.role))
       return { success: false, message: 'Approver access required.' };
+
     const row = ops_getTripRow_(tripId);
     if (!row) return { success: false, message: 'Trip not found.' };
     if (row.data[TRIP_COL.STATUS] !== TRIP_STATUS.SUBMITTED)
       return { success: false, message: 'Trip must be Submitted to approve.' };
+
     const sh  = ops_sh_(OPS_SHEETS.TRIPS);
     const now = new Date();
     sh.getRange(row.idx, TRIP_COL.STATUS       + 1).setValue(TRIP_STATUS.APPROVED);
@@ -804,6 +855,7 @@ function ops_approveTrip(tripId) {
     sh.getRange(row.idx, TRIP_COL.APPROVAL_DATE+ 1).setValue(now);
     sh.getRange(row.idx, TRIP_COL.UPDATED_AT   + 1).setValue(now);
     sh.getRange(row.idx, TRIP_COL.UPDATED_BY   + 1).setValue(user.email);
+
     ops_audit_('OPS_APPROVE_TRIP', { tripId, by: user.email });
     return { success: true, message: 'Trip ' + tripId + ' approved.' };
   } catch(e) { return { success: false, message: e.message }; }
@@ -814,15 +866,21 @@ function ops_rejectTrip(tripId, reason) {
     const user = ops_getUserInfo_();
     if (!ops_isApprover_(user.role))
       return { success: false, message: 'Approver access required.' };
-    if (!reason) return { success: false, message: 'Rejection reason required.' };
+    if (!reason || !reason.trim())
+      return { success: false, message: 'Rejection reason required.' };
+
     const row = ops_getTripRow_(tripId);
     if (!row) return { success: false, message: 'Trip not found.' };
+
     const sh  = ops_sh_(OPS_SHEETS.TRIPS);
     const now = new Date();
     sh.getRange(row.idx, TRIP_COL.STATUS        + 1).setValue(TRIP_STATUS.REJECTED);
-    sh.getRange(row.idx, TRIP_COL.REJECT_REASON + 1).setValue(reason);
+    sh.getRange(row.idx, TRIP_COL.REJECT_REASON + 1).setValue(reason.trim());
+    sh.getRange(row.idx, TRIP_COL.APPROVED_BY   + 1).setValue(user.email);
+    sh.getRange(row.idx, TRIP_COL.APPROVAL_DATE + 1).setValue(now);
     sh.getRange(row.idx, TRIP_COL.UPDATED_AT    + 1).setValue(now);
     sh.getRange(row.idx, TRIP_COL.UPDATED_BY    + 1).setValue(user.email);
+
     ops_audit_('OPS_REJECT_TRIP', { tripId, reason, by: user.email });
     return { success: true, message: 'Trip ' + tripId + ' rejected.' };
   } catch(e) { return { success: false, message: e.message }; }
@@ -831,15 +889,23 @@ function ops_rejectTrip(tripId, reason) {
 function ops_cancelTrip(tripId, reason) {
   try {
     const user = ops_getUserInfo_();
-    if (!reason) return { success: false, message: 'Cancel reason required.' };
+    if (!reason || !reason.trim())
+      return { success: false, message: 'Cancel reason required.' };
+
     const row = ops_getTripRow_(tripId);
     if (!row) return { success: false, message: 'Trip not found.' };
+
+    const allowed = [TRIP_STATUS.DRAFT, TRIP_STATUS.SUBMITTED, TRIP_STATUS.APPROVED];
+    if (!allowed.includes(row.data[TRIP_COL.STATUS]))
+      return { success: false, message: 'Cannot cancel a ' + row.data[TRIP_COL.STATUS] + ' trip.' };
+
     const sh  = ops_sh_(OPS_SHEETS.TRIPS);
     const now = new Date();
     sh.getRange(row.idx, TRIP_COL.STATUS        + 1).setValue(TRIP_STATUS.CANCELLED);
-    sh.getRange(row.idx, TRIP_COL.CANCEL_REASON + 1).setValue(reason);
+    sh.getRange(row.idx, TRIP_COL.CANCEL_REASON + 1).setValue(reason.trim());
     sh.getRange(row.idx, TRIP_COL.UPDATED_AT    + 1).setValue(now);
     sh.getRange(row.idx, TRIP_COL.UPDATED_BY    + 1).setValue(user.email);
+
     ops_audit_('OPS_CANCEL_TRIP', { tripId, reason, by: user.email });
     return { success: true, message: 'Trip ' + tripId + ' cancelled.' };
   } catch(e) { return { success: false, message: e.message }; }
@@ -848,34 +914,43 @@ function ops_cancelTrip(tripId, reason) {
 function ops_completeTrip(payload) {
   try {
     const user = ops_getUserInfo_();
+    if (!ops_isEncoder_(user.role))
+      return { success: false, message: 'Encoder access required.' };
     if (!payload.tripId)     return { success: false, message: 'Trip ID required.' };
     if (!payload.actualStart)return { success: false, message: 'Actual Start required.' };
     if (!payload.actualEnd)  return { success: false, message: 'Actual End required.' };
-    if (!payload.startKm)    return { success: false, message: 'Start Mileage required.' };
-    if (!payload.endKm)      return { success: false, message: 'End Mileage required.' };
-    const startKm  = parseFloat(payload.startKm);
-    const endKm    = parseFloat(payload.endKm);
-    if (endKm < startKm) return { success: false, message: 'End mileage dili pwede ubos sa start.' };
-    const distance = endKm - startKm;
+
+    const startKm = parseFloat(payload.startKm) || 0;
+    const endKm   = parseFloat(payload.endKm)   || 0;
+    if (isNaN(startKm) || isNaN(endKm)) return { success: false, message: 'Mileage must be a number.' };
+    if (endKm < startKm) return { success: false, message: 'End mileage cannot be less than start mileage.' };
+
     const row = ops_getTripRow_(payload.tripId);
     if (!row) return { success: false, message: 'Trip not found.' };
+    if (row.data[TRIP_COL.STATUS] !== TRIP_STATUS.APPROVED)
+      return { success: false, message: 'Trip must be Approved before completing.' };
+
+    const distance = endKm - startKm;
     const sh  = ops_sh_(OPS_SHEETS.TRIPS);
     const now = new Date();
-    sh.getRange(row.idx, TRIP_COL.STATUS       + 1).setValue(TRIP_STATUS.COMPLETED);
+
+    sh.getRange(row.idx, TRIP_COL.STATUS      + 1).setValue(TRIP_STATUS.COMPLETED);
     sh.getRange(row.idx, TRIP_COL.ACTUAL_START + 1).setValue(payload.actualStart);
-    sh.getRange(row.idx, TRIP_COL.ACTUAL_END   + 1).setValue(payload.actualEnd);
-    sh.getRange(row.idx, TRIP_COL.START_KM     + 1).setValue(startKm);
-    sh.getRange(row.idx, TRIP_COL.END_KM       + 1).setValue(endKm);
-    sh.getRange(row.idx, TRIP_COL.DISTANCE     + 1).setValue(distance);
-    sh.getRange(row.idx, TRIP_COL.PROOF_LINK   + 1).setValue(payload.proofLink || '');
-    sh.getRange(row.idx, TRIP_COL.REMARKS      + 1).setValue(payload.remarks   || '');
-    sh.getRange(row.idx, TRIP_COL.UPDATED_AT   + 1).setValue(now);
-    sh.getRange(row.idx, TRIP_COL.UPDATED_BY   + 1).setValue(user.email);
+    sh.getRange(row.idx, TRIP_COL.ACTUAL_END  + 1).setValue(payload.actualEnd);
+    sh.getRange(row.idx, TRIP_COL.START_KM    + 1).setValue(startKm);
+    sh.getRange(row.idx, TRIP_COL.END_KM      + 1).setValue(endKm);
+    sh.getRange(row.idx, TRIP_COL.DISTANCE    + 1).setValue(distance);
+    sh.getRange(row.idx, TRIP_COL.PROOF_LINK  + 1).setValue(payload.proofLink  || '');
+    sh.getRange(row.idx, TRIP_COL.REMARKS     + 1).setValue(payload.remarks    || '');
+    sh.getRange(row.idx, TRIP_COL.UPDATED_AT  + 1).setValue(now);
+    sh.getRange(row.idx, TRIP_COL.UPDATED_BY  + 1).setValue(user.email);
+
     ops_audit_('OPS_COMPLETE_TRIP', { tripId: payload.tripId, distance, by: user.email });
-    return { success: true, message: 'Trip ' + payload.tripId + ' completed. Distance: ' + distance + ' km.' };
+    return { success: true, message: 'Trip ' + payload.tripId + ' marked Completed. Distance: ' + distance + ' km.' };
   } catch(e) { return { success: false, message: e.message }; }
 }
 
+// ── Trip row finder helper ──
 function ops_getTripRow_(tripId) {
   const sh = ops_sh_(OPS_SHEETS.TRIPS);
   const lr = sh.getLastRow();
@@ -894,6 +969,7 @@ function ops_getTripRow_(tripId) {
 function ops_buildRenewalAlerts_(vehicles, alertDays) {
   const rows = [];
   vehicles.forEach(function(v) {
+    // Always add Insurance row — even if no expiry date set
     var insDays = v.insExpiry ? ops_daysLeft_(v.insExpiry) : null;
     rows.push({
       vehicleId  : v.vehicleId,
@@ -907,6 +983,7 @@ function ops_buildRenewalAlerts_(vehicles, alertDays) {
                  : insDays <= alertDays ? 'Due in ' + insDays + ' days'
                  : 'OK'
     });
+    // Always add LTO row
     var ltoDays = v.ltoExpiry ? ops_daysLeft_(v.ltoExpiry) : null;
     rows.push({
       vehicleId  : v.vehicleId,
@@ -921,6 +998,7 @@ function ops_buildRenewalAlerts_(vehicles, alertDays) {
                  : 'OK'
     });
   });
+  // Sort: Expired first, then Due Soon, then OK, then No Date
   rows.sort(function(a, b) {
     var sa = a.daysLeft === null ? 9999 : a.daysLeft;
     var sb = b.daysLeft === null ? 9999 : b.daysLeft;
@@ -934,12 +1012,16 @@ function ops_buildRenewalAlerts_(vehicles, alertDays) {
 // ============================================================
 function ops_buildReports_(trips, vehicles) {
   const completed = trips.filter(function(t) { return t.status === TRIP_STATUS.COMPLETED; });
+
+  // By vehicle
   const byVehicle = {};
   completed.forEach(function(t) {
     if (!byVehicle[t.plate]) byVehicle[t.plate] = { count: 0, km: 0 };
     byVehicle[t.plate].count++;
     byVehicle[t.plate].km += (parseFloat(t.distance) || 0);
   });
+
+  // By driver
   const byDriver = {};
   completed.forEach(function(t) {
     const key = t.driverName || 'Unknown';
@@ -947,13 +1029,18 @@ function ops_buildReports_(trips, vehicles) {
     byDriver[key].count++;
     byDriver[key].km += (parseFloat(t.distance) || 0);
   });
+
+  // By type — all trips
   const byType = {};
   trips.forEach(function(t) {
     byType[t.tripType] = (byType[t.tripType] || 0) + 1;
   });
+
+  // Mileage summary
   const mileageSummary = vehicles.map(function(v) {
     const recorded = (byVehicle[v.plate] || {}).km || 0;
     return { plate: v.plate, brand: v.brand, begMileage: v.begMileage, recordedKm: recorded };
   });
+
   return { byVehicle, byDriver, byType, mileageSummary };
 }
