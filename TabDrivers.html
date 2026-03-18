@@ -1,0 +1,358 @@
+<!-- TabDrivers.html — Driver Master Tab -->
+<style>
+  #tab-drivers, #tab-drivers * { color: var(--text); }
+</style>
+
+<div style="padding:24px 28px 40px;">
+
+  <!-- Header -->
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:22px;">
+    <div>
+      <h2 style="font-size:20px;font-weight:800;letter-spacing:-.02em;margin:0 0 3px;">Driver Master</h2>
+      <p style="font-size:13px;color:var(--text3);margin:0;">I-manage ang tanan nga registered drivers</p>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button id="drv-reload-btn" class="o-btn-reload" onclick="drv_reload()">
+        <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+        </svg>
+        Reload
+      </button>
+      <button class="o-btn o-btn-primary" onclick="drv_openModal()">+ Add Driver</button>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
+    <div class="o-search-wrap" style="flex:1;min-width:200px;">
+      <span class="o-search-icon">
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z"/>
+        </svg>
+      </span>
+      <input id="drv-search" class="o-input" placeholder="Search name, license ID, employee ID…" oninput="drv_apply()">
+    </div>
+    <select id="drv-status-filter" class="o-input" style="width:auto;" onchange="drv_apply()">
+      <option value="">All Status</option>
+      <option>Active</option>
+      <option>Inactive</option>
+    </select>
+    <span id="drv-count" style="font-size:12px;color:var(--text3);font-weight:600;white-space:nowrap;"></span>
+  </div>
+
+  <!-- Table (desktop) -->
+  <div class="o-table-wrap" id="drv-table-wrap">
+    <table class="o-table">
+      <thead>
+        <tr>
+          <th>Driver ID</th>
+          <th>Name</th>
+          <th>Employee ID</th>
+          <th>License ID</th>
+          <th>License Expiry</th>
+          <th>Contact</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="drv-tbody"></tbody>
+    </table>
+  </div>
+  <div id="drv-pagination" style="display:flex;align-items:center;gap:6px;margin-top:14px;flex-wrap:wrap;"></div>
+
+  <!-- Mobile cards -->
+  <div id="drv-cards" style="display:none;"></div>
+
+</div>
+
+<!-- Add / Edit Modal -->
+<div class="o-modal-overlay" id="drv-modal">
+  <div class="o-modal">
+    <div class="o-modal-header">
+      <div class="o-modal-title" id="drv-modal-title">Add Driver</div>
+      <button class="o-modal-close" onclick="drv_closeModal()">✕</button>
+    </div>
+    <div class="o-modal-body">
+      <div class="o-form-grid">
+
+        <div class="o-form-group">
+          <label class="o-label">Full Name *</label>
+          <input id="drv-name" class="o-input" placeholder="e.g. Juan dela Cruz">
+        </div>
+        <div class="o-form-group">
+          <label class="o-label">Employee ID <span style="color:var(--text3);font-weight:400;">(optional)</span></label>
+          <input id="drv-empid" class="o-input" placeholder="e.g. EMP-001">
+        </div>
+
+        <div class="o-form-group">
+          <label class="o-label">Driver License ID *</label>
+          <input id="drv-license-id" class="o-input" placeholder="e.g. N01-23-456789">
+        </div>
+        <div class="o-form-group">
+          <label class="o-label">License Expiry <span style="color:var(--text3);font-weight:400;">(optional)</span></label>
+          <input type="date" id="drv-license-expiry" class="o-input">
+        </div>
+
+        <div class="o-form-group">
+          <label class="o-label">Contact Number <span style="color:var(--text3);font-weight:400;">(optional)</span></label>
+          <input id="drv-contact" class="o-input" placeholder="e.g. 09171234567">
+        </div>
+        <div class="o-form-group">
+          <label class="o-label">Status *</label>
+          <select id="drv-status" class="o-input">
+            <option>Active</option>
+            <option>Inactive</option>
+          </select>
+        </div>
+
+        <div class="o-form-group span2">
+          <label class="o-label">Notes <span style="color:var(--text3);font-weight:400;">(optional)</span></label>
+          <textarea id="drv-notes" class="o-input" placeholder="Any additional info about this driver…" style="min-height:70px;"></textarea>
+        </div>
+
+      </div>
+    </div>
+    <div class="o-modal-footer">
+      <button class="o-btn o-btn-ghost" onclick="drv_closeModal()">Cancel</button>
+      <button id="drv-save-btn" class="o-btn o-btn-primary" onclick="drv_save()">Save Driver</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Confirm Modal -->
+<div class="o-modal-overlay" id="drv-delete-modal">
+  <div class="o-modal" style="max-width:400px;">
+    <div class="o-modal-header">
+      <div class="o-modal-title">Delete Driver</div>
+      <button class="o-modal-close" onclick="document.getElementById('drv-delete-modal').classList.remove('open')">✕</button>
+    </div>
+    <div class="o-modal-body">
+      <div id="drv-delete-msg" style="font-size:14px;line-height:1.6;"></div>
+    </div>
+    <div class="o-modal-footer">
+      <button class="o-btn o-btn-ghost" onclick="document.getElementById('drv-delete-modal').classList.remove('open')">Cancel</button>
+      <button id="drv-delete-confirm-btn" class="o-btn o-btn-danger" onclick="drv_confirmDelete()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var drv_all = [], drv_filtered = [], drv_editId = null, drv_deleteId = null;
+var drv_page = 1, drv_pageSize = 15;
+
+function init_drivers() {
+  drv_showSkeleton();
+  google.script.run
+    .withSuccessHandler(function(r) {
+      o_setReloading('drv-reload-btn', false);
+      if (!r.success) { o_toast('error', r.message); return; }
+      drv_all = r.drivers || [];
+      drv_page = 1;
+      drv_apply();
+    })
+    .withFailureHandler(function(e) {
+      o_setReloading('drv-reload-btn', false);
+      o_toast('error', e.message);
+    })
+    .getDriversInitData();
+}
+
+function drv_reload() {
+  o_setReloading('drv-reload-btn', true);
+  initializedTabs['drivers'] = false;
+  init_drivers();
+}
+
+function drv_showSkeleton() {
+  document.getElementById('drv-tbody').innerHTML = o_skelRows(8, 8);
+}
+
+function drv_apply() {
+  var q  = (document.getElementById('drv-search').value || '').toLowerCase();
+  var st = document.getElementById('drv-status-filter').value;
+  drv_filtered = drv_all.filter(function(d) {
+    var matchStatus = !st || d.status === st;
+    var matchQ = !q || (d.name + d.empId + d.licenseId + d.contact).toLowerCase().includes(q);
+    return matchStatus && matchQ;
+  });
+  document.getElementById('drv-count').textContent = drv_filtered.length + ' driver' + (drv_filtered.length !== 1 ? 's' : '');
+  drv_page = 1;
+  drv_renderPage();
+  o_renderPagination('drv-pagination', drv_page, Math.ceil(drv_filtered.length / drv_pageSize), 'drv_goPage');
+}
+
+function drv_goPage(p) {
+  var total = Math.ceil(drv_filtered.length / drv_pageSize);
+  if (p < 1 || p > total) return;
+  drv_page = p;
+  drv_renderPage();
+  o_renderPagination('drv-pagination', drv_page, total, 'drv_goPage');
+}
+
+function drv_renderPage() {
+  var start = (drv_page - 1) * drv_pageSize;
+  var slice = drv_filtered.slice(start, start + drv_pageSize);
+  var tb = document.getElementById('drv-tbody');
+
+  if (!slice.length) {
+    tb.innerHTML = '<tr><td colspan="8"><div class="o-empty"><div class="o-empty-icon">🧑‍✈️</div><p>Walay nakit-an nga drivers.</p></div></td></tr>';
+    drv_renderCards([]);
+    return;
+  }
+
+  // License expiry badge helper
+  function expiryBadge(dateStr) {
+    if (!dateStr) return '<span style="color:var(--text3);">—</span>';
+    var parts = dateStr.split('-');
+    if (parts.length !== 3) return o_esc(dateStr);
+    var expiry = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    var today  = new Date(); today.setHours(0,0,0,0);
+    var days   = Math.ceil((expiry - today) / 86400000);
+    if (days < 0)  return '<span style="background:var(--red-bg);color:var(--red);border:1px solid var(--red-bd);border-radius:5px;padding:1px 7px;font-size:11px;font-weight:700;">EXPIRED</span>';
+    if (days <= 30) return '<span style="background:var(--amber-bg);color:var(--accent);border:1px solid var(--amber-bd);border-radius:5px;padding:1px 7px;font-size:11px;font-weight:700;">' + o_esc(dateStr) + ' (' + days + 'd)</span>';
+    return '<span style="font-size:12px;color:var(--text2);">' + o_esc(dateStr) + '</span>';
+  }
+
+  tb.innerHTML = slice.map(function(d) {
+    var statusColor = d.status === 'Active'
+      ? 'background:var(--green-bg,#0d2b1a);color:var(--green,#4ade80);border:1px solid var(--green-bd,#166534);'
+      : 'background:var(--surface2);color:var(--text3);border:1px solid var(--border);';
+    return '<tr>'
+      + '<td class="td-id mono" style="font-size:12px;">' + o_esc(d.driverId) + '</td>'
+      + '<td style="font-weight:600;">' + o_esc(d.name) + '</td>'
+      + '<td style="font-size:12px;color:var(--text3);">' + (d.empId ? o_esc(d.empId) : '—') + '</td>'
+      + '<td><span style="font-family:DM Mono,monospace;font-size:12px;font-weight:700;color:var(--accent);">' + o_esc(d.licenseId) + '</span></td>'
+      + '<td>' + expiryBadge(d.licenseExpiry) + '</td>'
+      + '<td style="font-size:12px;color:var(--text2);">' + (d.contact ? o_esc(d.contact) : '—') + '</td>'
+      + '<td><span style="' + statusColor + 'border-radius:5px;padding:2px 8px;font-size:11px;font-weight:700;">' + o_esc(d.status) + '</span></td>'
+      + '<td><div class="td-actions">'
+      +   '<button class="o-btn o-btn-ghost o-btn-sm" onclick="drv_openModal(\'' + o_esc(d.driverId) + '\')">Edit</button>'
+      +   '<button class="o-btn o-btn-danger o-btn-sm" onclick="drv_openDelete(\'' + o_esc(d.driverId) + '\')">Delete</button>'
+      + '</div></td>'
+      + '</tr>';
+  }).join('');
+
+  drv_renderCards(slice);
+}
+
+function drv_renderCards(slice) {
+  var el = document.getElementById('drv-cards');
+  if (!el) return;
+  if (!slice.length) { el.innerHTML = ''; return; }
+  el.innerHTML = slice.map(function(d) {
+    return '<div class="o-card" style="padding:14px;margin-bottom:10px;">'
+      + '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">'
+      +   '<span class="mono" style="font-size:11px;color:var(--text3);">' + o_esc(d.driverId) + '</span>'
+      +   '<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:5px;' + (d.status==='Active'?'background:var(--green-bg,#0d2b1a);color:var(--green,#4ade80);':'background:var(--surface2);color:var(--text3);') + '">' + o_esc(d.status) + '</span>'
+      + '</div>'
+      + '<div style="font-weight:700;font-size:15px;margin-bottom:3px;">' + o_esc(d.name) + '</div>'
+      + '<div style="font-size:12px;color:var(--accent);font-family:DM Mono,monospace;font-weight:700;margin-bottom:2px;">🪪 ' + o_esc(d.licenseId) + '</div>'
+      + (d.empId ? '<div style="font-size:12px;color:var(--text3);margin-bottom:8px;">' + o_esc(d.empId) + '</div>' : '<div style="margin-bottom:8px;"></div>')
+      + '<div style="display:flex;gap:8px;">'
+      +   '<button class="o-btn o-btn-ghost o-btn-sm" onclick="drv_openModal(\'' + o_esc(d.driverId) + '\')">Edit</button>'
+      +   '<button class="o-btn o-btn-danger o-btn-sm" onclick="drv_openDelete(\'' + o_esc(d.driverId) + '\')">Delete</button>'
+      + '</div>'
+      + '</div>';
+  }).join('');
+}
+
+// ── Modal: Add / Edit ──
+function drv_openModal(id) {
+  drv_editId = id || null;
+  document.getElementById('drv-modal-title').textContent = id ? 'Edit Driver' : 'Add Driver';
+  document.getElementById('drv-save-btn').textContent = 'Save Driver';
+
+  // Clear fields
+  ['drv-name','drv-empid','drv-license-id','drv-license-expiry','drv-contact','drv-notes'].forEach(function(f) {
+    document.getElementById(f).value = '';
+  });
+  document.getElementById('drv-status').value = 'Active';
+
+  if (id) {
+    var d = drv_all.find(function(x) { return x.driverId === id; });
+    if (d) {
+      document.getElementById('drv-name').value           = d.name || '';
+      document.getElementById('drv-empid').value          = d.empId || '';
+      document.getElementById('drv-license-id').value     = d.licenseId || '';
+      document.getElementById('drv-license-expiry').value = d.licenseExpiry || '';
+      document.getElementById('drv-contact').value        = d.contact || '';
+      document.getElementById('drv-status').value         = d.status || 'Active';
+      document.getElementById('drv-notes').value          = d.notes || '';
+    }
+  }
+  document.getElementById('drv-modal').classList.add('open');
+}
+
+function drv_closeModal() {
+  document.getElementById('drv-modal').classList.remove('open');
+}
+
+function drv_save() {
+  var name      = document.getElementById('drv-name').value.trim();
+  var licenseId = document.getElementById('drv-license-id').value.trim();
+  if (!name)      { o_toast('error', 'Full Name required.'); return; }
+  if (!licenseId) { o_toast('error', 'Driver License ID required.'); return; }
+
+  var btn = document.getElementById('drv-save-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+
+  var payload = {
+    driverId      : drv_editId,
+    name,
+    empId         : document.getElementById('drv-empid').value.trim(),
+    licenseId,
+    licenseExpiry : document.getElementById('drv-license-expiry').value,
+    contact       : document.getElementById('drv-contact').value.trim(),
+    status        : document.getElementById('drv-status').value,
+    notes         : document.getElementById('drv-notes').value.trim()
+  };
+
+  var fn = drv_editId ? 'ops_updateDriver' : 'ops_addDriver';
+  google.script.run
+    .withSuccessHandler(function(r) {
+      btn.disabled = false; btn.textContent = 'Save Driver';
+      if (r.success) {
+        o_toast('success', r.message);
+        drv_closeModal();
+        initializedTabs['drivers'] = false;
+        init_drivers();
+      } else { o_toast('error', r.message); }
+    })
+    .withFailureHandler(function(e) {
+      btn.disabled = false; btn.textContent = 'Save Driver';
+      o_toast('error', e.message);
+    })
+    [fn](payload);
+}
+
+// ── Modal: Delete ──
+function drv_openDelete(id) {
+  drv_deleteId = id;
+  var d = drv_all.find(function(x) { return x.driverId === id; });
+  document.getElementById('drv-delete-msg').innerHTML =
+    'Sigurado ka ba nga gusto nimo i-delete si <strong>' + o_esc(d ? d.name : id) + '</strong>?<br>'
+    + '<span style="font-size:12px;color:var(--text3);">Driver ID: ' + o_esc(id) + ' · Dili na ma-undo kini.</span>';
+  document.getElementById('drv-delete-modal').classList.add('open');
+}
+
+function drv_confirmDelete() {
+  if (!drv_deleteId) return;
+  var btn = document.getElementById('drv-delete-confirm-btn');
+  btn.disabled = true; btn.textContent = 'Deleting…';
+  google.script.run
+    .withSuccessHandler(function(r) {
+      btn.disabled = false; btn.textContent = 'Delete';
+      document.getElementById('drv-delete-modal').classList.remove('open');
+      if (r.success) {
+        o_toast('success', r.message);
+        initializedTabs['drivers'] = false;
+        init_drivers();
+      } else { o_toast('error', r.message); }
+    })
+    .withFailureHandler(function(e) {
+      btn.disabled = false; btn.textContent = 'Delete';
+      o_toast('error', e.message);
+    })
+    .ops_deleteDriver(drv_deleteId);
+}
+</script>
