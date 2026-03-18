@@ -141,8 +141,7 @@ function ops_bootstrap() {
     {
       name: 'Drivers',
        headers: ['Driver_ID','Full_Name','Employee_ID','License_ID',
-            'License_Expiry','Contact_Number','Status','Notes',
-            'Login_Email']
+            'License_Expiry','Contact_Number','Status','Notes']
     },
   ];
 
