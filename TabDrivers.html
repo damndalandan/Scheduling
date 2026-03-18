@@ -284,7 +284,6 @@ function drv_openModal(id) {
   document.getElementById('drv-modal-title').textContent = id ? 'Edit Driver' : 'Add Driver';
   document.getElementById('drv-save-btn').textContent = 'Save Driver';
 
-  // Clear all fields
   ['drv-name','drv-empid','drv-license-id','drv-license-expiry',
    'drv-contact','drv-notes','drv-email','drv-password'].forEach(function(f) {
     var el = document.getElementById(f);
@@ -292,9 +291,9 @@ function drv_openModal(id) {
   });
   document.getElementById('drv-status').value = 'Active';
 
-  // ✅ Show login account section on Add only, hide on Edit
+  // ✅ Always show email/password — both Add and Edit
   var acctSection = document.getElementById('drv-account-section');
-  if (acctSection) acctSection.style.display = id ? 'none' : '';
+  if (acctSection) acctSection.style.display = '';
 
   // Reset password visibility
   drv_pwVisible = false;
@@ -311,8 +310,15 @@ function drv_openModal(id) {
       document.getElementById('drv-contact').value        = d.contact || '';
       document.getElementById('drv-status').value         = d.status || 'Active';
       document.getElementById('drv-notes').value          = d.notes || '';
+      document.getElementById('drv-email').value          = d.loginEmail || '';
     }
+    // Edit: blank = keep existing password
+    document.getElementById('drv-password').placeholder = 'Leave blank to keep current password';
+  } else {
+    // Add: password required
+    document.getElementById('drv-password').placeholder = 'Set a password';
   }
+
   document.getElementById('drv-modal').classList.add('open');
 }
 
@@ -340,13 +346,14 @@ function drv_save() {
   if (!name)      { o_toast('error', 'Full Name required.'); return; }
   if (!licenseId) { o_toast('error', 'Driver License ID required.'); return; }
 
-  // ✅ Email + Password required on Add only
   if (!drv_editId) {
+    // ✅ Add: email + password required
     if (!email)    { o_toast('error', 'Email required para sa driver account.'); return; }
     if (!password) { o_toast('error', 'Password required para sa driver account.'); return; }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      o_toast('error', 'Invalid email format.'); return;
-    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { o_toast('error', 'Invalid email format.'); return; }
+  } else {
+    // ✅ Edit: validate format if email was changed
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { o_toast('error', 'Invalid email format.'); return; }
   }
 
   var btn = document.getElementById('drv-save-btn');
