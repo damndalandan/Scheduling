@@ -1126,13 +1126,34 @@ function ops_addDriver(payload) {
       return { success: false, message: 'Access denied.' };
     if (!payload.name)      return { success: false, message: 'Full Name required.' };
     if (!payload.licenseId) return { success: false, message: 'Driver License ID required.' };
+    if (!payload.email)     return { success: false, message: 'Email required para sa driver account.' };
+    if (!payload.password)  return { success: false, message: 'Password required para sa driver account.' };
+
     const drivers = ops_getAllDrivers_();
     if (drivers.some(function(d) {
       return d.licenseId.toLowerCase() === payload.licenseId.trim().toLowerCase();
     })) return { success: false, message: 'License ID "' + payload.licenseId + '" already exists.' };
+
+    var loginSh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('LoginUsers');
+    if (!loginSh) {
+      loginSh = SpreadsheetApp.getActiveSpreadsheet().insertSheet('LoginUsers');
+      loginSh.getRange(1, 1, 1, 3).setValues([['Email', 'Password', 'Role']]);
+      loginSh.getRange(1, 1, 1, 3).setFontWeight('bold').setBackground('#f8fafc');
+      loginSh.setFrozenRows(1);
+    }
+
+    if (loginSh.getLastRow() >= 2) {
+      var loginData = loginSh.getRange(2, 1, loginSh.getLastRow() - 1, 1).getValues();
+      var emailExists = loginData.some(function(r) {
+        return String(r[0]).trim().toLowerCase() === payload.email.trim().toLowerCase();
+      });
+      if (emailExists) return { success: false, message: 'Email "' + payload.email + '" already exists sa LoginUsers.' };
+    }
+
     const sh  = ops_sh_(OPS_SHEETS.DRIVERS);
     const id  = ops_genId_('D', drivers.map(function(d) { return [d.driverId]; }), 0);
     const now = new Date();
+
     sh.getRange(sh.getLastRow() + 1, 1, 1, 11).setValues([[
       id,
       payload.name.trim(),
@@ -1143,10 +1164,21 @@ function ops_addDriver(payload) {
       payload.status        || 'Active',
       payload.notes         || '',
       now, now,
-      payload.email         || ''  // ✅ Column K — login email
+      payload.email.trim().toLowerCase()
     ]]);
-    ops_audit_('OPS_ADD_DRIVER', { driverId: id, name: payload.name, by: user.email });
-    return { success: true, message: 'Driver ' + id + ' added.', driverId: id };
+
+    loginSh.getRange(loginSh.getLastRow() + 1, 1, 1, 3).setValues([[
+      payload.email.trim().toLowerCase(),
+      payload.password,
+      'driver'
+    ]]);
+
+    ops_audit_('OPS_ADD_DRIVER', { driverId: id, name: payload.name, email: payload.email, by: user.email });
+    return {
+      success  : true,
+      message  : 'Driver ' + id + ' added. Login account created for ' + payload.email + '.',
+      driverId : id
+    };
   } catch(e) { return { success: false, message: e.message }; }
 }
 
