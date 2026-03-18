@@ -105,6 +105,31 @@
           </select>
         </div>
 
+        <div class="o-form-group span2" id="drv-account-section">
+          <div style="background:var(--amber-bg);border:1px solid var(--amber-bd);border-radius:9px;padding:12px 14px;margin-bottom:10px;">
+            <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:4px;">🔑 Driver Login Account</div>
+            <div style="font-size:12px;color:var(--text2);">Optional — fill this to create a login account for this driver.</div>
+          </div>
+          <div class="o-form-grid" style="padding:0;">
+            <div class="o-form-group">
+              <label class="o-label">Email Address <span style="color:var(--text3);font-weight:400;">(for login)</span></label>
+              <input id="drv-email" class="o-input" type="email" placeholder="e.g. driver@email.com">
+            </div>
+            <div class="o-form-group">
+              <label class="o-label">Password <span style="color:var(--text3);font-weight:400;">(for login)</span></label>
+              <div style="position:relative;">
+                <input id="drv-password" class="o-input" type="password" placeholder="Set a password" style="padding-right:42px;">
+                <button type="button" onclick="drv_togglePw()" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text3);padding:4px;">
+                  <svg id="drv-eye" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="o-form-group span2">
           <label class="o-label">Notes <span style="color:var(--text3);font-weight:400;">(optional)</span></label>
           <textarea id="drv-notes" class="o-input" placeholder="Any additional info about this driver…" style="min-height:70px;"></textarea>
