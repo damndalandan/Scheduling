@@ -1305,3 +1305,97 @@ function getTripsInitData() {
     return { success: true, user, trips, vehicles, drivers, employees, joList, joError };
   } catch(e) { return { success: false, message: e.message }; }
 }
+
+// ============================================================
+//  TRIP TYPES — CRUD (Settings sheet, key = 'trip_type')
+// ============================================================
+
+function ops_getTripTypes_() {
+  const sh = ops_sh_(OPS_SHEETS.SETTINGS);
+  const lr = sh.getLastRow();
+  if (lr < 2) return [];
+  return sh.getRange(2, 1, lr - 1, 2).getValues()
+    .map(function(r, i) { return { row: i + 2, key: String(r[0]).trim(), value: String(r[1]).trim() }; })
+    .filter(function(r) { return r.key === 'trip_type' && r.value; });
+}
+
+function getTripTypesInitData() {
+  try {
+    const user  = ops_getUserInfo_();
+    const types = ops_getTripTypes_().map(function(r) {
+      return { row: r.row, value: r.value };
+    });
+    return { success: true, user, types };
+  } catch(e) { return { success: false, message: e.message }; }
+}
+
+function ops_addTripType(value) {
+  try {
+    const user = ops_getUserInfo_();
+    if (!ops_isAdmin_(user.role) && !ops_isEncoder_(user.role))
+      return { success: false, message: 'Access denied.' };
+    value = String(value || '').trim();
+    if (!value) return { success: false, message: 'Trip Type value required.' };
+
+    const existing = ops_getTripTypes_();
+    if (existing.some(function(r) { return r.value.toLowerCase() === value.toLowerCase(); }))
+      return { success: false, message: '"' + value + '" already exists.' };
+
+    const sh = ops_sh_(OPS_SHEETS.SETTINGS);
+    sh.getRange(sh.getLastRow() + 1, 1, 1, 2).setValues([['trip_type', value]]);
+    ops_audit_('ADD_TRIP_TYPE', { value, by: user.email });
+    return { success: true, message: 'Trip Type "' + value + '" added.' };
+  } catch(e) { return { success: false, message: e.message }; }
+}
+
+function ops_updateTripType(row, newValue) {
+  try {
+    const user = ops_getUserInfo_();
+    if (!ops_isAdmin_(user.role) && !ops_isEncoder_(user.role))
+      return { success: false, message: 'Access denied.' };
+    newValue = String(newValue || '').trim();
+    if (!newValue) return { success: false, message: 'Value required.' };
+    row = parseInt(row);
+    if (!row || row < 2) return { success: false, message: 'Invalid row.' };
+
+    const existing = ops_getTripTypes_().filter(function(r) { return r.row !== row; });
+    if (existing.some(function(r) { return r.value.toLowerCase() === newValue.toLowerCase(); }))
+      return { success: false, message: '"' + newValue + '" already exists.' };
+
+    const sh = ops_sh_(OPS_SHEETS.SETTINGS);
+    sh.getRange(row, 2).setValue(newValue);
+    ops_audit_('UPDATE_TRIP_TYPE', { row, newValue, by: user.email });
+    return { success: true, message: 'Trip Type updated to "' + newValue + '".' };
+  } catch(e) { return { success: false, message: e.message }; }
+}
+
+function ops_deleteTripType(row) {
+  try {
+    const user = ops_getUserInfo_();
+    if (!ops_isAdmin_(user.role))
+      return { success: false, message: 'Admin access required to delete Trip Types.' };
+    row = parseInt(row);
+    if (!row || row < 2) return { success: false, message: 'Invalid row.' };
+
+    const sh = ops_sh_(OPS_SHEETS.SETTINGS);
+    // Validate it's actually a trip_type row
+    const key = String(sh.getRange(row, 1).getValue()).trim();
+    if (key !== 'trip_type') return { success: false, message: 'Row is not a Trip Type.' };
+
+    sh.deleteRow(row);
+    ops_audit_('DELETE_TRIP_TYPE', { row, by: user.email });
+    return { success: true, message: 'Trip Type deleted.' };
+  } catch(e) { return { success: false, message: e.message }; }
+}
+
+function seedTripTypes() {
+  var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Settings');
+  var types = [
+    'Owner Errand',
+    'Supplier Delivery - Ormoc',
+    'Supplier Delivery - Outside Ormoc',
+    'Signage Installation',
+    'Other'
+  ];
+  types.forEach(function(t) { sh.appendRow(['trip_type', t]); });
+}

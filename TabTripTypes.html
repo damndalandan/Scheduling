@@ -1,0 +1,241 @@
+<!-- TabTripTypes.html — Trip Type Maintenance -->
+<style>
+  #tab-trip-types, #tab-trip-types * { color: var(--text); }
+</style>
+
+<div style="padding:24px 28px 40px;">
+
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:22px;">
+    <div>
+      <h2 style="font-size:20px;font-weight:800;letter-spacing:-.02em;margin:0 0 3px;">Trip Type Maintenance</h2>
+      <p style="font-size:13px;color:var(--text3);margin:0;">I-manage ang dropdown values sa Trip Type</p>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button id="tt-reload-btn" class="o-btn-reload" onclick="tt_reload()">
+        <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+        </svg>
+        Reload
+      </button>
+      <button class="o-btn o-btn-primary" onclick="tt_openAdd()">+ Add Trip Type</button>
+    </div>
+  </div>
+
+  <div class="o-alert o-alert-info" style="margin-bottom:18px;font-size:13px;">
+    ℹ️ Ang mga Trip Type dinhi ang mag-populate sa dropdown sa New Trip form. Ang mga pagbag-o mag-apply dayon.
+  </div>
+
+  <div class="o-search-wrap" style="margin-bottom:14px;max-width:400px;">
+    <span class="o-search-icon">
+      <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z"/>
+      </svg>
+    </span>
+    <input id="tt-search" class="o-input" placeholder="Search trip types…" oninput="tt_apply()">
+  </div>
+
+  <div class="o-table-wrap" style="max-width:640px;">
+    <table class="o-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Trip Type</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="tt-tbody"></tbody>
+    </table>
+  </div>
+
+  <div id="tt-count" style="font-size:12px;color:var(--text3);font-weight:600;margin-top:10px;"></div>
+
+</div>
+
+<!-- Add / Edit Modal -->
+<div class="o-modal-overlay" id="tt-modal">
+  <div class="o-modal o-modal-sm">
+    <div class="o-modal-header">
+      <div class="o-modal-title" id="tt-modal-title">Add Trip Type</div>
+      <button class="o-modal-close" onclick="tt_closeModal()">✕</button>
+    </div>
+    <div class="o-modal-body">
+      <div class="o-form-group">
+        <label class="o-label">Trip Type Name *</label>
+        <input id="tt-value" class="o-input" placeholder="e.g. Supplier Delivery - Cebu"
+          onkeydown="if(event.key==='Enter') tt_save()">
+        <div style="font-size:11px;color:var(--text3);margin-top:5px;">Kini ang makita sa Trip Type dropdown.</div>
+      </div>
+    </div>
+    <div class="o-modal-footer">
+      <button class="o-btn o-btn-ghost" onclick="tt_closeModal()">Cancel</button>
+      <button id="tt-save-btn" class="o-btn o-btn-primary" onclick="tt_save()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Confirm Modal -->
+<div class="o-modal-overlay" id="tt-delete-modal">
+  <div class="o-modal o-modal-sm">
+    <div class="o-modal-header">
+      <div class="o-modal-title" style="color:var(--red);">Delete Trip Type</div>
+      <button class="o-modal-close" onclick="document.getElementById('tt-delete-modal').classList.remove('open')">✕</button>
+    </div>
+    <div class="o-modal-body">
+      <div class="o-alert o-alert-error" style="margin-bottom:14px;">
+        ⚠️ Permanente nga mapapala. Ang existing trips nga naggamit niini dili maapektuhan.
+      </div>
+      <div id="tt-delete-info" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:12px 14px;font-size:14px;font-weight:600;"></div>
+    </div>
+    <div class="o-modal-footer">
+      <button class="o-btn o-btn-ghost" onclick="document.getElementById('tt-delete-modal').classList.remove('open')">Cancel</button>
+      <button id="tt-delete-btn" class="o-btn o-btn-danger" onclick="tt_confirmDelete()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var tt_all = [], tt_filtered = [], tt_editRow = null, tt_deleteRow = null;
+
+function init_trip_types() {
+  document.getElementById('tt-tbody').innerHTML = o_skelRows(3, 5);
+  google.script.run
+    .withSuccessHandler(function(r) {
+      o_setReloading('tt-reload-btn', false);
+      if (!r.success) { o_toast('error', r.message); return; }
+      tt_all = r.types || [];
+      tt_apply();
+    })
+    .withFailureHandler(function(e) {
+      o_setReloading('tt-reload-btn', false);
+      o_toast('error', e.message);
+    })
+    .getTripTypesInitData();
+}
+
+function tt_reload() {
+  o_setReloading('tt-reload-btn', true);
+  initializedTabs['trip-types'] = false;
+  init_trip_types();
+}
+
+function tt_apply() {
+  var q = (document.getElementById('tt-search').value || '').toLowerCase();
+  tt_filtered = q
+    ? tt_all.filter(function(t) { return t.value.toLowerCase().includes(q); })
+    : tt_all.slice();
+  document.getElementById('tt-count').textContent = tt_filtered.length + ' trip type' + (tt_filtered.length !== 1 ? 's' : '');
+  tt_render();
+}
+
+function tt_render() {
+  var tb = document.getElementById('tt-tbody');
+  if (!tt_filtered.length) {
+    tb.innerHTML = '<tr><td colspan="3"><div class="o-empty"><div class="o-empty-icon">🏷️</div><p>Walay trip types. Mag-add na!</p></div></td></tr>';
+    return;
+  }
+  tb.innerHTML = tt_filtered.map(function(t, i) {
+    return '<tr>'
+      + '<td class="td-id" style="width:50px;">' + (i + 1) + '</td>'
+      + '<td style="font-weight:600;font-size:14px;">'
+      +   '<span style="display:inline-flex;align-items:center;gap:8px;">'
+      +     '<span style="width:8px;height:8px;border-radius:50%;background:var(--accent);flex-shrink:0;display:inline-block;"></span>'
+      +     o_esc(t.value)
+      +   '</span>'
+      + '</td>'
+      + '<td><div class="td-actions">'
+      +   '<button class="o-btn o-btn-ghost o-btn-sm" onclick="tt_openEdit(' + t.row + ', \'' + o_esc(t.value).replace(/'/g, "\\'") + '\')">✏️ Edit</button>'
+      +   '<button class="o-btn o-btn-danger o-btn-sm" onclick="tt_openDelete(' + t.row + ', \'' + o_esc(t.value).replace(/'/g, "\\'") + '\')">🗑️ Delete</button>'
+      + '</div></td>'
+      + '</tr>';
+  }).join('');
+}
+
+// ── Add ──
+function tt_openAdd() {
+  tt_editRow = null;
+  document.getElementById('tt-modal-title').textContent = 'Add Trip Type';
+  document.getElementById('tt-value').value = '';
+  document.getElementById('tt-save-btn').textContent = 'Add Trip Type';
+  document.getElementById('tt-modal').classList.add('open');
+  setTimeout(function() { document.getElementById('tt-value').focus(); }, 150);
+}
+
+// ── Edit ──
+function tt_openEdit(row, value) {
+  tt_editRow = row;
+  document.getElementById('tt-modal-title').textContent = 'Edit Trip Type';
+  document.getElementById('tt-value').value = value;
+  document.getElementById('tt-save-btn').textContent = 'Save Changes';
+  document.getElementById('tt-modal').classList.add('open');
+  setTimeout(function() { document.getElementById('tt-value').focus(); }, 150);
+}
+
+function tt_closeModal() {
+  document.getElementById('tt-modal').classList.remove('open');
+}
+
+function tt_save() {
+  var val = document.getElementById('tt-value').value.trim();
+  if (!val) { o_toast('error', 'Trip Type name required.'); return; }
+
+  var btn = document.getElementById('tt-save-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+
+  var fn, arg1, arg2;
+  if (tt_editRow) {
+    fn = 'ops_updateTripType'; arg1 = tt_editRow; arg2 = val;
+  } else {
+    fn = 'ops_addTripType'; arg1 = val; arg2 = undefined;
+  }
+
+  var handler = function(r) {
+    btn.disabled = false;
+    btn.textContent = tt_editRow ? 'Save Changes' : 'Add Trip Type';
+    if (r.success) {
+      o_toast('success', r.message);
+      tt_closeModal();
+      tt_reload();
+      // Also invalidate new-trip tab so dropdown refreshes
+      initializedTabs['new-trip'] = false;
+    } else { o_toast('error', r.message); }
+  };
+
+  if (tt_editRow) {
+    google.script.run.withSuccessHandler(handler).withFailureHandler(function(e) {
+      btn.disabled = false; btn.textContent = 'Save Changes'; o_toast('error', e.message);
+    }).ops_updateTripType(arg1, arg2);
+  } else {
+    google.script.run.withSuccessHandler(handler).withFailureHandler(function(e) {
+      btn.disabled = false; btn.textContent = 'Add Trip Type'; o_toast('error', e.message);
+    }).ops_addTripType(arg1);
+  }
+}
+
+// ── Delete ──
+function tt_openDelete(row, value) {
+  tt_deleteRow = row;
+  document.getElementById('tt-delete-info').textContent = '🏷️ ' + value;
+  document.getElementById('tt-delete-modal').classList.add('open');
+}
+
+function tt_confirmDelete() {
+  if (!tt_deleteRow) return;
+  var btn = document.getElementById('tt-delete-btn');
+  btn.disabled = true; btn.textContent = 'Deleting…';
+  google.script.run
+    .withSuccessHandler(function(r) {
+      btn.disabled = false; btn.textContent = 'Delete';
+      document.getElementById('tt-delete-modal').classList.remove('open');
+      if (r.success) {
+        o_toast('success', r.message);
+        tt_reload();
+        initializedTabs['new-trip'] = false;
+      } else { o_toast('error', r.message); }
+    })
+    .withFailureHandler(function(e) {
+      btn.disabled = false; btn.textContent = 'Delete';
+      o_toast('error', e.message);
+    })
+    .ops_deleteTripType(tt_deleteRow);
+}
+</script>

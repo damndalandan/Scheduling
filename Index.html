@@ -210,7 +210,12 @@ textarea.o-input{resize:vertical;min-height:72px;}
       <svg width="17" height="17" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3l14 9-14 9V3z"/></svg>
       <span class="sb-label">Trip Completion</span>
     </div>
-
+    <div class="o-nav-item" data-tab="trip-types">
+      <svg width="17" height="17" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink:0;">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-5 5a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a2 2 0 014-4z"/>
+      </svg>
+      <span class="sb-label">Trip Types</span>
+    </div>
     <div class="o-nav-divider"></div>
     <div class="o-nav-section sb-label">Reports</div>
     <div class="o-nav-item" data-tab="reports">
@@ -253,7 +258,7 @@ textarea.o-input{resize:vertical;min-height:72px;}
   <div id="tab-approval"   class="tab-pane"><?!= include('TabApproval') ?></div>
   <div id="tab-completion" class="tab-pane"><?!= include('TabCompletion') ?></div>
   <div id="tab-reports"    class="tab-pane"><?!= include('TabReports') ?></div>
-  <!-- ✅ DRIVER: Dedicated driver dashboard tab -->
+  <div id="tab-trip-types" class="tab-pane"><?!= include('TabTripTypes') ?></div>
   <div id="tab-driver-dashboard" class="tab-pane"><?!= include('Tabdriverdashboard') ?></div>
 </main>
 
@@ -388,7 +393,7 @@ function o_applyRoleUI(role) {
   var isDriver = role.toLowerCase() === 'driver';
 
   // Nav items to hide for driver (data-tab values)
-  var driverHidden = ['dashboard','vehicles', 'renewals', 'trips', 'new-trip', 'approval', 'completion', 'reports'];
+  var driverHidden = ['dashboard','vehicles','renewals','trips','new-trip','approval','completion','reports','trip-types'];
 
   driverHidden.forEach(function(tab) {
     var navEl = document.querySelector('.o-nav-item[data-tab="' + tab + '"]');
