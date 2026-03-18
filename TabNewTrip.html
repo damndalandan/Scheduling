@@ -246,7 +246,6 @@ function init_new_trip() {
 // ══════════════════════════════════════
 function nt_filterReq() {
   var q = (document.getElementById('nt-req-name').value || '').toLowerCase().trim();
-  // Clear empid if user types manually
   document.getElementById('nt-req-empid').value = '';
   nt_empFiltered = q
     ? nt_employees.filter(function(e) {
