@@ -1184,3 +1184,49 @@ function ops_deleteDriver(driverId) {
     return { success: true, message: 'Driver ' + driverId + ' permanently deleted.' };
   } catch(e) { return { success: false, message: e.message }; }
 }
+
+// ============================================================
+//  PASTE THESE 2 THINGS IN YOUR Code.js
+// ============================================================
+
+// ── PART 1: New function — paste anywhere (e.g. after ops_getSettings_) ──
+// Reads EmployeeName sheet: Col A = Employee Code, Col B = Team, Col C = Name of Employee
+
+function ops_getEmployeeList_() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sh = ss.getSheetByName('EmployeeName');
+    if (!sh) return [];
+    const lr = sh.getLastRow();
+    if (lr < 2) return [];
+    return sh.getRange(2, 1, lr - 1, 3).getValues()
+      .filter(function(r) { return r[2] && String(r[2]).trim(); })
+      .map(function(r) {
+        return {
+          empCode : String(r[0] || '').trim(),
+          team    : String(r[1] || '').trim(),
+          name    : String(r[2] || '').trim()
+        };
+      });
+  } catch(e) {
+    Logger.log('ops_getEmployeeList_ error: ' + e.message);
+    return [];
+  }
+}
+
+
+// ── PART 2: Replace your existing getTripsInitData() with this ──
+
+function getTripsInitData() {
+  try {
+    const user      = ops_getUserInfo_();
+    const trips     = ops_getAllTrips_();
+    const vehicles  = ops_getAllVehicles_();
+    const drivers   = ops_getAllDrivers_();
+    const employees = ops_getEmployeeList_();
+    const joResult  = ops_getJOList();
+    const joList    = joResult.success ? joResult.data : [];
+    const joError   = joResult.success ? null : joResult.message;
+    return { success: true, user, trips, vehicles, drivers, employees, joList, joError };
+  } catch(e) { return { success: false, message: e.message }; }
+}

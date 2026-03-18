@@ -22,7 +22,6 @@
 <div style="padding:24px 28px 40px;">
   <div style="max-width:800px;margin:0 auto;">
 
-    <!-- Header -->
     <div style="margin-bottom:22px;">
       <h2 style="font-size:20px;font-weight:800;letter-spacing:-.02em;margin:0 0 3px;">New Trip Request</h2>
       <p style="font-size:13px;color:var(--text3);margin:0;">I-fill ang details sa imong trip request</p>
@@ -30,14 +29,13 @@
 
     <div class="o-card" style="padding:24px;">
 
-      <!-- Section: Requestor Info -->
+      <!-- Requestor Info -->
       <div class="o-divider" style="margin-top:0;">Requestor Information</div>
       <div class="o-form-grid" style="margin-bottom:18px;">
 
-        <!-- Requestor Name — searchable dropdown + manual type -->
         <div class="o-form-group" style="position:relative;">
           <label class="o-label">Requestor Name *</label>
-          <input id="nt-req-name" class="o-input" placeholder="Type or select name…"
+          <input id="nt-req-name" class="o-input" placeholder="Type or select employee…"
             autocomplete="off"
             oninput="nt_filterReq()"
             onfocus="nt_showReqDropdown()"
@@ -53,7 +51,7 @@
         </div>
       </div>
 
-      <!-- Section: Trip Details -->
+      <!-- Trip Details -->
       <div class="o-divider">Trip Details</div>
       <div class="o-form-grid" style="margin-bottom:18px;">
         <div class="o-form-group">
@@ -94,7 +92,7 @@
         </div>
       </div>
 
-      <!-- Section: Route & Schedule -->
+      <!-- Route & Schedule -->
       <div class="o-divider">Route & Schedule</div>
       <div class="o-form-grid" style="margin-bottom:18px;">
         <div class="o-form-group">
@@ -106,7 +104,6 @@
           <input id="nt-to" class="o-input" placeholder="e.g. Cebu Supplier Warehouse">
         </div>
 
-        <!-- Planned Start — 12-hour AM/PM -->
         <div class="o-form-group">
           <label class="o-label">Planned Start *</label>
           <div class="nt-time-row">
@@ -122,14 +119,12 @@
               <option>00</option><option>15</option><option>30</option><option>45</option>
             </select>
             <select id="nt-start-ampm" class="o-input">
-              <option value="">AM/PM</option>
-              <option>AM</option><option>PM</option>
+              <option value="">AM/PM</option><option>AM</option><option>PM</option>
             </select>
           </div>
           <input type="hidden" id="nt-start-date">
         </div>
 
-        <!-- Planned End — 12-hour AM/PM -->
         <div class="o-form-group">
           <label class="o-label">Planned End *</label>
           <div class="nt-time-row">
@@ -145,15 +140,14 @@
               <option>00</option><option>15</option><option>30</option><option>45</option>
             </select>
             <select id="nt-end-ampm" class="o-input">
-              <option value="">AM/PM</option>
-              <option>AM</option><option>PM</option>
+              <option value="">AM/PM</option><option>AM</option><option>PM</option>
             </select>
           </div>
           <input type="hidden" id="nt-end-date">
         </div>
       </div>
 
-      <!-- Section: Vehicle & Driver -->
+      <!-- Vehicle & Driver -->
       <div class="o-divider">Vehicle & Driver</div>
       <div id="nt-veh-note" class="o-alert o-alert-info" style="margin-bottom:14px;font-size:12px;">
         ℹ️ Vehicle ug Driver pwede i-fill later. Required lang kung i-submit na.
@@ -171,7 +165,6 @@
             style="background:var(--surface);cursor:not-allowed;color:var(--text2);">
         </div>
 
-        <!-- Driver Name — searchable dropdown + manual type -->
         <div class="o-form-group" style="position:relative;">
           <label class="o-label">Driver Name</label>
           <input id="nt-driver-name" class="o-input" placeholder="Type or select driver…"
@@ -193,12 +186,8 @@
       <!-- Actions -->
       <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;padding-top:8px;border-top:1px solid var(--border);">
         <button class="o-btn o-btn-ghost" onclick="nt_reset()">Clear</button>
-        <button id="nt-draft-btn" class="o-btn o-btn-ghost" onclick="nt_saveTrip('Draft')">
-          💾 Save as Draft
-        </button>
-        <button id="nt-submit-btn" class="o-btn o-btn-primary" onclick="nt_saveTrip('Submitted')">
-          📤 Submit for Approval
-        </button>
+        <button id="nt-draft-btn" class="o-btn o-btn-ghost" onclick="nt_saveTrip('Draft')">💾 Save as Draft</button>
+        <button id="nt-submit-btn" class="o-btn o-btn-primary" onclick="nt_saveTrip('Submitted')">📤 Submit for Approval</button>
       </div>
 
     </div>
@@ -209,13 +198,13 @@
 var nt_vehicles       = [];
 var nt_drivers        = [];
 var nt_driverFiltered = [];
-var nt_reqList        = [];
-var nt_reqFiltered    = [];
+var nt_employees      = [];   // from EmployeeName sheet
+var nt_empFiltered    = [];
 var nt_joList         = [];
 var nt_joFiltered     = [];
 
 function init_new_trip() {
-  document.getElementById('nt-jo-search').placeholder = 'Loading JOs…';
+  document.getElementById('nt-jo-search').placeholder = 'Loading…';
   document.getElementById('nt-jo-search').disabled = true;
 
   google.script.run
@@ -226,19 +215,19 @@ function init_new_trip() {
       nt_vehicles = (r.vehicles || []).filter(function(v) { return v.status === 'Active'; });
       nt_populateVehicles();
 
-      // Drivers from Driver Master (Active only)
+      // Drivers (Active only) from Driver Master
       nt_drivers        = (r.drivers || []).filter(function(d) { return d.status === 'Active'; });
       nt_driverFiltered = nt_drivers.slice();
 
-      // Requestor list — use drivers list as suggestions
-      nt_reqList     = nt_drivers.map(function(d) { return { name: d.name, empId: d.empId || '' }; });
-      nt_reqFiltered = nt_reqList.slice();
+      // Employees from EmployeeName sheet
+      nt_employees   = r.employees || [];
+      nt_empFiltered = nt_employees.slice();
 
       // JO list
       nt_joList     = r.joList || [];
       nt_joFiltered = nt_joList.slice();
       var joInput   = document.getElementById('nt-jo-search');
-      joInput.disabled = false;
+      joInput.disabled    = false;
       joInput.placeholder = nt_joList.length
         ? 'Search JO number or description… (' + nt_joList.length + ' JOs)'
         : (r.joError || 'No JOs found');
@@ -246,42 +235,48 @@ function init_new_trip() {
     })
     .withFailureHandler(function(e) {
       document.getElementById('nt-jo-search').disabled = false;
-      document.getElementById('nt-jo-search').placeholder = 'Error loading JOs — type manually';
+      document.getElementById('nt-jo-search').placeholder = 'Error loading — type manually';
       o_toast('error', 'Init failed: ' + e.message);
     })
     .getTripsInitData();
 }
 
-// ── Requestor Dropdown ──
+// ══════════════════════════════════════
+//  REQUESTOR DROPDOWN (EmployeeName sheet)
+// ══════════════════════════════════════
 function nt_filterReq() {
   var q = (document.getElementById('nt-req-name').value || '').toLowerCase().trim();
-  nt_reqFiltered = q
-    ? nt_reqList.filter(function(r) { return r.name.toLowerCase().includes(q); })
-    : nt_reqList.slice();
+  // Clear empid if user types manually
+  document.getElementById('nt-req-empid').value = '';
+  nt_empFiltered = q
+    ? nt_employees.filter(function(e) {
+        return e.name.toLowerCase().includes(q) || e.empCode.toLowerCase().includes(q);
+      })
+    : nt_employees.slice();
   nt_renderReqList();
   nt_showReqDropdown();
 }
 
 function nt_renderReqList() {
   var container = document.getElementById('nt-req-list');
-  if (!nt_reqFiltered.length) {
+  if (!nt_empFiltered.length) {
     container.innerHTML = '<div style="padding:10px 14px;font-size:13px;color:var(--text3);">Walay nakit-an — pwede manual type.</div>';
     return;
   }
   var html = '';
-  nt_reqFiltered.slice(0, 50).forEach(function(r, i) {
-    html += '<div class="nt-dropdown-item" data-req-idx="' + i + '">'
-          +   '<div class="item-name">' + o_esc(r.name) + '</div>'
-          +   (r.empId ? '<div class="item-sub">' + o_esc(r.empId) + '</div>' : '')
+  nt_empFiltered.slice(0, 60).forEach(function(e, i) {
+    html += '<div class="nt-dropdown-item" data-emp-idx="' + i + '">'
+          +   '<div class="item-name">' + o_esc(e.name) + '</div>'
+          +   '<div class="item-sub">' + o_esc(e.empCode) + (e.team ? ' · ' + o_esc(e.team) : '') + '</div>'
           + '</div>';
   });
   container.innerHTML = html;
   container.querySelectorAll('.nt-dropdown-item').forEach(function(el) {
-    var idx = parseInt(el.getAttribute('data-req-idx'));
-    el.addEventListener('mousedown', function(e) {
-      e.preventDefault();
-      document.getElementById('nt-req-name').value  = nt_reqFiltered[idx].name;
-      document.getElementById('nt-req-empid').value = nt_reqFiltered[idx].empId || '';
+    var idx = parseInt(el.getAttribute('data-emp-idx'));
+    el.addEventListener('mousedown', function(ev) {
+      ev.preventDefault();
+      document.getElementById('nt-req-name').value  = nt_empFiltered[idx].name;
+      document.getElementById('nt-req-empid').value = nt_empFiltered[idx].empCode;
       nt_hideReqDropdown();
     });
   });
@@ -295,7 +290,9 @@ function nt_hideReqDropdown() {
   document.getElementById('nt-req-dropdown').style.display = 'none';
 }
 
-// ── Driver Dropdown ──
+// ══════════════════════════════════════
+//  DRIVER DROPDOWN (Driver Master)
+// ══════════════════════════════════════
 function nt_filterDriver() {
   var q = (document.getElementById('nt-driver-name').value || '').toLowerCase().trim();
   document.getElementById('nt-driver-empid').value = '';
@@ -324,8 +321,8 @@ function nt_renderDriverList() {
   container.innerHTML = html;
   container.querySelectorAll('.nt-dropdown-item').forEach(function(el) {
     var idx = parseInt(el.getAttribute('data-drv-idx'));
-    el.addEventListener('mousedown', function(e) {
-      e.preventDefault();
+    el.addEventListener('mousedown', function(ev) {
+      ev.preventDefault();
       document.getElementById('nt-driver-name').value  = nt_driverFiltered[idx].name;
       document.getElementById('nt-driver-empid').value = nt_driverFiltered[idx].empId || '';
       nt_hideDriverDropdown();
@@ -341,7 +338,9 @@ function nt_hideDriverDropdown() {
   document.getElementById('nt-driver-dropdown').style.display = 'none';
 }
 
-// ── JO Dropdown ──
+// ══════════════════════════════════════
+//  JO DROPDOWN
+// ══════════════════════════════════════
 function nt_filterJO() {
   var q = (document.getElementById('nt-jo-search').value || '').toLowerCase().trim();
   nt_joFiltered = q
@@ -375,8 +374,8 @@ function nt_renderJOList() {
     el.style.cssText = 'padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .12s;';
     el.addEventListener('mouseenter', function() { this.style.background = 'var(--amber-bg)'; });
     el.addEventListener('mouseleave', function() { this.style.background = 'transparent'; });
-    el.addEventListener('mousedown',  function(e) {
-      e.preventDefault();
+    el.addEventListener('mousedown', function(ev) {
+      ev.preventDefault();
       document.getElementById('nt-related-jo').value      = slice[idx].joNumber;
       document.getElementById('nt-jo-search').value       = slice[idx].joNumber + (slice[idx].jobDesc ? ' — ' + slice[idx].jobDesc : '');
       document.getElementById('nt-jo-selected-badge').style.display = 'block';
@@ -400,7 +399,9 @@ function nt_hideJODropdown() {
   document.getElementById('nt-jo-dropdown').style.display = 'none';
 }
 
-// ── Vehicle ──
+// ══════════════════════════════════════
+//  VEHICLE
+// ══════════════════════════════════════
 function nt_populateVehicles() {
   var sel = document.getElementById('nt-vehicle-id');
   sel.innerHTML = '<option value="">-- Select Vehicle --</option>'
@@ -412,11 +413,14 @@ function nt_populateVehicles() {
 }
 
 function nt_onVehicleChange() {
-  var opt = document.getElementById('nt-vehicle-id').options[document.getElementById('nt-vehicle-id').selectedIndex];
+  var sel = document.getElementById('nt-vehicle-id');
+  var opt = sel.options[sel.selectedIndex];
   document.getElementById('nt-plate').value = opt ? (opt.getAttribute('data-plate') || '') : '';
 }
 
-// ── Datetime (12-hour AM/PM) ──
+// ══════════════════════════════════════
+//  DATETIME 12-HOUR AM/PM
+// ══════════════════════════════════════
 function nt_buildDatetime(prefix) {
   var d = document.getElementById(prefix + '-date-d').value;
   var h = document.getElementById(prefix + '-hour').value;
@@ -434,7 +438,9 @@ function nt_syncDatetimes() {
   document.getElementById('nt-end-date').value   = nt_buildDatetime('nt-end');
 }
 
-// ── Reset ──
+// ══════════════════════════════════════
+//  RESET
+// ══════════════════════════════════════
 function nt_reset() {
   ['nt-req-name','nt-req-empid','nt-related-jo','nt-purpose',
    'nt-from','nt-to','nt-start-date','nt-end-date','nt-start-date-d','nt-end-date-d',
@@ -452,7 +458,9 @@ function nt_reset() {
   nt_hideJODropdown(); nt_hideDriverDropdown(); nt_hideReqDropdown();
 }
 
-// ── Save / Submit ──
+// ══════════════════════════════════════
+//  SAVE / SUBMIT
+// ══════════════════════════════════════
 function nt_saveTrip(status) {
   nt_syncDatetimes();
   var reqName   = document.getElementById('nt-req-name').value.trim();
