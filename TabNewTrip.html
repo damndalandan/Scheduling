@@ -5,11 +5,23 @@
   .nt-time-row { display:flex; gap:6px; align-items:center; }
   .nt-time-row input[type="date"] { flex: 1.6; }
   .nt-time-row select { flex: 1; min-width: 0; padding-left: 8px; }
+  .nt-dropdown {
+    display:none; position:absolute; z-index:200; left:0; right:0; top:100%;
+    background:var(--surface); border:1.5px solid var(--accent); border-radius:10px;
+    max-height:200px; overflow-y:auto; box-shadow:0 8px 32px rgba(0,0,0,.5); margin-top:3px;
+  }
+  .nt-dropdown-item {
+    padding:10px 14px; cursor:pointer; border-bottom:1px solid var(--border); transition:background .12s;
+  }
+  .nt-dropdown-item:last-child { border-bottom:none; }
+  .nt-dropdown-item:hover { background:var(--amber-bg); }
+  .nt-dropdown-item .item-name { font-size:13px; font-weight:600; color:var(--text); }
+  .nt-dropdown-item .item-sub  { font-size:11px; color:var(--text3); margin-top:2px; }
 </style>
 
 <div style="padding:24px 28px 40px;">
-
   <div style="max-width:800px;margin:0 auto;">
+
     <!-- Header -->
     <div style="margin-bottom:22px;">
       <h2 style="font-size:20px;font-weight:800;letter-spacing:-.02em;margin:0 0 3px;">New Trip Request</h2>
@@ -21,13 +33,23 @@
       <!-- Section: Requestor Info -->
       <div class="o-divider" style="margin-top:0;">Requestor Information</div>
       <div class="o-form-grid" style="margin-bottom:18px;">
-        <div class="o-form-group">
+
+        <!-- Requestor Name — searchable dropdown + manual type -->
+        <div class="o-form-group" style="position:relative;">
           <label class="o-label">Requestor Name *</label>
-          <input id="nt-req-name" class="o-input" placeholder="Full name">
+          <input id="nt-req-name" class="o-input" placeholder="Type or select name…"
+            autocomplete="off"
+            oninput="nt_filterReq()"
+            onfocus="nt_showReqDropdown()"
+            onblur="setTimeout(nt_hideReqDropdown, 200)">
+          <div id="nt-req-dropdown" class="nt-dropdown">
+            <div id="nt-req-list"></div>
+          </div>
         </div>
+
         <div class="o-form-group">
           <label class="o-label">Employee ID <span style="color:var(--text3);font-weight:400;">(optional)</span></label>
-          <input id="nt-req-empid" class="o-input" placeholder="e.g. EMP-001">
+          <input id="nt-req-empid" class="o-input" placeholder="Auto-filled or e.g. EMP-001">
         </div>
       </div>
 
@@ -64,7 +86,6 @@
             max-height:220px;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.5);margin-top:3px;">
             <div id="nt-jo-list"></div>
           </div>
-          <!-- Hidden field that stores the actual JO number to submit -->
           <input type="hidden" id="nt-related-jo">
         </div>
         <div class="o-form-group span2">
@@ -73,7 +94,7 @@
         </div>
       </div>
 
-      <!-- Section: Route -->
+      <!-- Section: Route & Schedule -->
       <div class="o-divider">Route & Schedule</div>
       <div class="o-form-grid" style="margin-bottom:18px;">
         <div class="o-form-group">
@@ -85,7 +106,7 @@
           <input id="nt-to" class="o-input" placeholder="e.g. Cebu Supplier Warehouse">
         </div>
 
-        <!-- Planned Start — 12-hour picker -->
+        <!-- Planned Start — 12-hour AM/PM -->
         <div class="o-form-group">
           <label class="o-label">Planned Start *</label>
           <div class="nt-time-row">
@@ -105,11 +126,10 @@
               <option>AM</option><option>PM</option>
             </select>
           </div>
-          <!-- Hidden field — backend still receives datetime-local format -->
           <input type="hidden" id="nt-start-date">
         </div>
 
-        <!-- Planned End — 12-hour picker -->
+        <!-- Planned End — 12-hour AM/PM -->
         <div class="o-form-group">
           <label class="o-label">Planned End *</label>
           <div class="nt-time-row">
@@ -129,7 +149,6 @@
               <option>AM</option><option>PM</option>
             </select>
           </div>
-          <!-- Hidden field — backend still receives datetime-local format -->
           <input type="hidden" id="nt-end-date">
         </div>
       </div>
@@ -148,15 +167,26 @@
         </div>
         <div class="o-form-group">
           <label class="o-label">Plate Number</label>
-          <input id="nt-plate" class="o-input" placeholder="Auto-filled" readonly style="background:var(--surface);cursor:not-allowed;color:var(--text2);">
+          <input id="nt-plate" class="o-input" placeholder="Auto-filled" readonly
+            style="background:var(--surface);cursor:not-allowed;color:var(--text2);">
         </div>
-        <div class="o-form-group">
+
+        <!-- Driver Name — searchable dropdown + manual type -->
+        <div class="o-form-group" style="position:relative;">
           <label class="o-label">Driver Name</label>
-          <input id="nt-driver-name" class="o-input" placeholder="Driver's full name">
+          <input id="nt-driver-name" class="o-input" placeholder="Type or select driver…"
+            autocomplete="off"
+            oninput="nt_filterDriver()"
+            onfocus="nt_showDriverDropdown()"
+            onblur="setTimeout(nt_hideDriverDropdown, 200)">
+          <div id="nt-driver-dropdown" class="nt-dropdown">
+            <div id="nt-driver-list"></div>
+          </div>
         </div>
+
         <div class="o-form-group">
           <label class="o-label">Driver Employee ID <span style="color:var(--text3);font-weight:400;">(optional)</span></label>
-          <input id="nt-driver-empid" class="o-input" placeholder="e.g. EMP-002">
+          <input id="nt-driver-empid" class="o-input" placeholder="Auto-filled or e.g. EMP-002">
         </div>
       </div>
 
@@ -176,12 +206,15 @@
 </div>
 
 <script>
-var nt_vehicles = [];
-var nt_joList   = [];    // full JO list from JODatabase
-var nt_joFiltered = [];  // currently filtered
+var nt_vehicles       = [];
+var nt_drivers        = [];
+var nt_driverFiltered = [];
+var nt_reqList        = [];
+var nt_reqFiltered    = [];
+var nt_joList         = [];
+var nt_joFiltered     = [];
 
 function init_new_trip() {
-  // Show JO field loading state
   document.getElementById('nt-jo-search').placeholder = 'Loading JOs…';
   document.getElementById('nt-jo-search').disabled = true;
 
@@ -193,29 +226,122 @@ function init_new_trip() {
       nt_vehicles = (r.vehicles || []).filter(function(v) { return v.status === 'Active'; });
       nt_populateVehicles();
 
+      // Drivers from Driver Master (Active only)
+      nt_drivers        = (r.drivers || []).filter(function(d) { return d.status === 'Active'; });
+      nt_driverFiltered = nt_drivers.slice();
+
+      // Requestor list — use drivers list as suggestions
+      nt_reqList     = nt_drivers.map(function(d) { return { name: d.name, empId: d.empId || '' }; });
+      nt_reqFiltered = nt_reqList.slice();
+
       // JO list
-      nt_joList = r.joList || [];
+      nt_joList     = r.joList || [];
       nt_joFiltered = nt_joList.slice();
-      var joInput = document.getElementById('nt-jo-search');
+      var joInput   = document.getElementById('nt-jo-search');
       joInput.disabled = false;
-      if (nt_joList.length) {
-        joInput.placeholder = 'Search JO number or description… (' + nt_joList.length + ' JOs)';
-      } else {
-        var joMsg = r.joError || 'No JOs found in Line-up JOs';
-        joInput.placeholder = joMsg;
-        joInput.title = joMsg;
-        console.warn('JO load issue:', joMsg);
-      }
+      joInput.placeholder = nt_joList.length
+        ? 'Search JO number or description… (' + nt_joList.length + ' JOs)'
+        : (r.joError || 'No JOs found');
+      if (r.joError) joInput.title = r.joError;
     })
     .withFailureHandler(function(e) {
       document.getElementById('nt-jo-search').disabled = false;
       document.getElementById('nt-jo-search').placeholder = 'Error loading JOs — type manually';
-      o_toast('error', 'JO load failed: ' + e.message);
+      o_toast('error', 'Init failed: ' + e.message);
     })
     .getTripsInitData();
 }
 
-// ── JO Dropdown logic ──
+// ── Requestor Dropdown ──
+function nt_filterReq() {
+  var q = (document.getElementById('nt-req-name').value || '').toLowerCase().trim();
+  nt_reqFiltered = q
+    ? nt_reqList.filter(function(r) { return r.name.toLowerCase().includes(q); })
+    : nt_reqList.slice();
+  nt_renderReqList();
+  nt_showReqDropdown();
+}
+
+function nt_renderReqList() {
+  var container = document.getElementById('nt-req-list');
+  if (!nt_reqFiltered.length) {
+    container.innerHTML = '<div style="padding:10px 14px;font-size:13px;color:var(--text3);">Walay nakit-an — pwede manual type.</div>';
+    return;
+  }
+  var html = '';
+  nt_reqFiltered.slice(0, 50).forEach(function(r, i) {
+    html += '<div class="nt-dropdown-item" data-req-idx="' + i + '">'
+          +   '<div class="item-name">' + o_esc(r.name) + '</div>'
+          +   (r.empId ? '<div class="item-sub">' + o_esc(r.empId) + '</div>' : '')
+          + '</div>';
+  });
+  container.innerHTML = html;
+  container.querySelectorAll('.nt-dropdown-item').forEach(function(el) {
+    var idx = parseInt(el.getAttribute('data-req-idx'));
+    el.addEventListener('mousedown', function(e) {
+      e.preventDefault();
+      document.getElementById('nt-req-name').value  = nt_reqFiltered[idx].name;
+      document.getElementById('nt-req-empid').value = nt_reqFiltered[idx].empId || '';
+      nt_hideReqDropdown();
+    });
+  });
+}
+
+function nt_showReqDropdown() {
+  nt_renderReqList();
+  document.getElementById('nt-req-dropdown').style.display = 'block';
+}
+function nt_hideReqDropdown() {
+  document.getElementById('nt-req-dropdown').style.display = 'none';
+}
+
+// ── Driver Dropdown ──
+function nt_filterDriver() {
+  var q = (document.getElementById('nt-driver-name').value || '').toLowerCase().trim();
+  document.getElementById('nt-driver-empid').value = '';
+  nt_driverFiltered = q
+    ? nt_drivers.filter(function(d) {
+        return d.name.toLowerCase().includes(q) || (d.licenseId || '').toLowerCase().includes(q);
+      })
+    : nt_drivers.slice();
+  nt_renderDriverList();
+  nt_showDriverDropdown();
+}
+
+function nt_renderDriverList() {
+  var container = document.getElementById('nt-driver-list');
+  if (!nt_driverFiltered.length) {
+    container.innerHTML = '<div style="padding:10px 14px;font-size:13px;color:var(--text3);">Walay nakit-an — pwede manual type.</div>';
+    return;
+  }
+  var html = '';
+  nt_driverFiltered.slice(0, 50).forEach(function(d, i) {
+    html += '<div class="nt-dropdown-item" data-drv-idx="' + i + '">'
+          +   '<div class="item-name">' + o_esc(d.name) + '</div>'
+          +   '<div class="item-sub">🪪 ' + o_esc(d.licenseId) + (d.empId ? ' · ' + o_esc(d.empId) : '') + '</div>'
+          + '</div>';
+  });
+  container.innerHTML = html;
+  container.querySelectorAll('.nt-dropdown-item').forEach(function(el) {
+    var idx = parseInt(el.getAttribute('data-drv-idx'));
+    el.addEventListener('mousedown', function(e) {
+      e.preventDefault();
+      document.getElementById('nt-driver-name').value  = nt_driverFiltered[idx].name;
+      document.getElementById('nt-driver-empid').value = nt_driverFiltered[idx].empId || '';
+      nt_hideDriverDropdown();
+    });
+  });
+}
+
+function nt_showDriverDropdown() {
+  nt_renderDriverList();
+  document.getElementById('nt-driver-dropdown').style.display = 'block';
+}
+function nt_hideDriverDropdown() {
+  document.getElementById('nt-driver-dropdown').style.display = 'none';
+}
+
+// ── JO Dropdown ──
 function nt_filterJO() {
   var q = (document.getElementById('nt-jo-search').value || '').toLowerCase().trim();
   nt_joFiltered = q
@@ -223,11 +349,8 @@ function nt_filterJO() {
         return j.joNumber.toLowerCase().includes(q) || j.jobDesc.toLowerCase().includes(q);
       })
     : nt_joList.slice();
-
-  // Clear selection if user is typing again
   document.getElementById('nt-related-jo').value = '';
   document.getElementById('nt-jo-selected-badge').style.display = 'none';
-
   nt_renderJOList();
   nt_showJODropdown();
 }
@@ -238,30 +361,29 @@ function nt_renderJOList() {
     container.innerHTML = '<div style="padding:12px 14px;font-size:13px;color:var(--text3);text-align:center;">Walay nakit-an nga JO.</div>';
     return;
   }
-
   var slice = nt_joFiltered.slice(0, 80);
-  var rows = '';
+  var rows  = '';
   for (var i = 0; i < slice.length; i++) {
-    var j = slice[i];
     rows += '<div class="nt-jo-item" data-idx="' + i + '">'
-          +   '<div style="font-family:DM Mono,monospace;font-size:12px;font-weight:700;color:var(--accent);">' + o_esc(j.joNumber) + '</div>'
-          +   '<div style="font-size:12px;color:var(--text2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + o_esc(j.jobDesc || '—') + '</div>'
+          +   '<div style="font-family:DM Mono,monospace;font-size:12px;font-weight:700;color:var(--accent);">' + o_esc(slice[i].joNumber) + '</div>'
+          +   '<div style="font-size:12px;color:var(--text2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + o_esc(slice[i].jobDesc || '—') + '</div>'
           + '</div>';
   }
   container.innerHTML = rows;
-
-  var items = container.querySelectorAll('.nt-jo-item');
-  items.forEach(function(el) {
+  container.querySelectorAll('.nt-jo-item').forEach(function(el) {
     var idx = parseInt(el.getAttribute('data-idx'));
     el.style.cssText = 'padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .12s;';
     el.addEventListener('mouseenter', function() { this.style.background = 'var(--amber-bg)'; });
     el.addEventListener('mouseleave', function() { this.style.background = 'transparent'; });
     el.addEventListener('mousedown',  function(e) {
       e.preventDefault();
-      nt_selectJO(slice[idx].joNumber, slice[idx].jobDesc);
+      document.getElementById('nt-related-jo').value      = slice[idx].joNumber;
+      document.getElementById('nt-jo-search').value       = slice[idx].joNumber + (slice[idx].jobDesc ? ' — ' + slice[idx].jobDesc : '');
+      document.getElementById('nt-jo-selected-badge').style.display = 'block';
+      document.getElementById('nt-jo-selected-badge').textContent   = slice[idx].joNumber;
+      nt_hideJODropdown();
     });
   });
-
   if (nt_joFiltered.length > 80) {
     var more = document.createElement('div');
     more.style.cssText = 'padding:8px 14px;font-size:11px;color:var(--text3);text-align:center;';
@@ -270,24 +392,15 @@ function nt_renderJOList() {
   }
 }
 
-function nt_selectJO(joNumber, jobDesc) {
-  document.getElementById('nt-related-jo').value = joNumber;
-  document.getElementById('nt-jo-search').value  = joNumber + (jobDesc ? ' — ' + jobDesc : '');
-  var badge = document.getElementById('nt-jo-selected-badge');
-  badge.style.display = 'block';
-  badge.textContent   = joNumber;
-  nt_hideJODropdown();
-}
-
 function nt_showJODropdown() {
   nt_renderJOList();
   document.getElementById('nt-jo-dropdown').style.display = 'block';
 }
-
 function nt_hideJODropdown() {
   document.getElementById('nt-jo-dropdown').style.display = 'none';
 }
 
+// ── Vehicle ──
 function nt_populateVehicles() {
   var sel = document.getElementById('nt-vehicle-id');
   sel.innerHTML = '<option value="">-- Select Vehicle --</option>'
@@ -299,23 +412,21 @@ function nt_populateVehicles() {
 }
 
 function nt_onVehicleChange() {
-  var sel  = document.getElementById('nt-vehicle-id');
-  var opt  = sel.options[sel.selectedIndex];
+  var opt = document.getElementById('nt-vehicle-id').options[document.getElementById('nt-vehicle-id').selectedIndex];
   document.getElementById('nt-plate').value = opt ? (opt.getAttribute('data-plate') || '') : '';
 }
 
-// ── 12-hour AM/PM → datetime-local converter ──
+// ── Datetime (12-hour AM/PM) ──
 function nt_buildDatetime(prefix) {
-  var d    = document.getElementById(prefix + '-date-d').value;
-  var h    = document.getElementById(prefix + '-hour').value;
-  var m    = document.getElementById(prefix + '-min').value;
-  var ampm = document.getElementById(prefix + '-ampm').value;
-  if (!d || !h || !m || !ampm) return '';
-  var hour24 = parseInt(h);
-  if (ampm === 'AM') { if (hour24 === 12) hour24 = 0; }
-  else               { if (hour24 !== 12) hour24 += 12; }
-  var hh = hour24 < 10 ? '0' + hour24 : '' + hour24;
-  return d + 'T' + hh + ':' + m;
+  var d = document.getElementById(prefix + '-date-d').value;
+  var h = document.getElementById(prefix + '-hour').value;
+  var m = document.getElementById(prefix + '-min').value;
+  var a = document.getElementById(prefix + '-ampm').value;
+  if (!d || !h || !m || !a) return '';
+  var h24 = parseInt(h);
+  if (a === 'AM') { if (h24 === 12) h24 = 0; }
+  else            { if (h24 !== 12) h24 += 12; }
+  return d + 'T' + (h24 < 10 ? '0' : '') + h24 + ':' + m;
 }
 
 function nt_syncDatetimes() {
@@ -326,9 +437,7 @@ function nt_syncDatetimes() {
 // ── Reset ──
 function nt_reset() {
   ['nt-req-name','nt-req-empid','nt-related-jo','nt-purpose',
-   'nt-from','nt-to',
-   'nt-start-date','nt-end-date',
-   'nt-start-date-d','nt-end-date-d',
+   'nt-from','nt-to','nt-start-date','nt-end-date','nt-start-date-d','nt-end-date-d',
    'nt-driver-name','nt-driver-empid','nt-plate'].forEach(function(id) {
     document.getElementById(id).value = '';
   });
@@ -338,16 +447,14 @@ function nt_reset() {
   });
   document.getElementById('nt-trip-type').value  = '';
   document.getElementById('nt-vehicle-id').value = '';
-  document.getElementById('nt-jo-search').value          = '';
+  document.getElementById('nt-jo-search').value  = '';
   document.getElementById('nt-jo-selected-badge').style.display = 'none';
-  nt_hideJODropdown();
+  nt_hideJODropdown(); nt_hideDriverDropdown(); nt_hideReqDropdown();
 }
 
 // ── Save / Submit ──
 function nt_saveTrip(status) {
-  // Sync hidden datetime fields from 12-hour pickers first
   nt_syncDatetimes();
-
   var reqName   = document.getElementById('nt-req-name').value.trim();
   var tripType  = document.getElementById('nt-trip-type').value;
   var purpose   = document.getElementById('nt-purpose').value.trim();
@@ -365,7 +472,6 @@ function nt_saveTrip(status) {
   if (!endDate)   { o_toast('error', 'Planned End required.'); return; }
 
   var vehicleId  = document.getElementById('nt-vehicle-id').value;
-  var plate      = document.getElementById('nt-plate').value.trim();
   var driverName = document.getElementById('nt-driver-name').value.trim();
 
   if (status === 'Submitted') {
@@ -378,15 +484,6 @@ function nt_saveTrip(status) {
   draftBtn.disabled = true; submitBtn.disabled = true;
   submitBtn.textContent = status === 'Submitted' ? 'Submitting…' : 'Saving…';
 
-  var payload = {
-    reqName, reqEmpId: document.getElementById('nt-req-empid').value.trim(),
-    tripType, purpose, relatedJo: document.getElementById('nt-related-jo').value.trim(),
-    fromLoc, toLoc, startDate, endDate,
-    vehicleId, plate,
-    driverEmpId: document.getElementById('nt-driver-empid').value.trim(),
-    driverName, status
-  };
-
   google.script.run
     .withSuccessHandler(function(r) {
       draftBtn.disabled = false; submitBtn.disabled = false;
@@ -394,15 +491,11 @@ function nt_saveTrip(status) {
       if (r.success) {
         o_toast('success', r.message);
         nt_reset();
-        // Force reload on all affected tabs
-        initializedTabs['trips']      = false;
-        initializedTabs['approval']   = false;
-        initializedTabs['dashboard']  = false;
-        // If user is already on trips tab, reload it now
+        initializedTabs['trips']     = false;
+        initializedTabs['approval']  = false;
+        initializedTabs['dashboard'] = false;
         var tripsPane = document.getElementById('tab-trips');
-        if (tripsPane && tripsPane.classList.contains('active')) {
-          init_trips();
-        }
+        if (tripsPane && tripsPane.classList.contains('active')) init_trips();
       } else { o_toast('error', r.message); }
     })
     .withFailureHandler(function(e) {
@@ -410,6 +503,16 @@ function nt_saveTrip(status) {
       submitBtn.textContent = '📤 Submit for Approval';
       o_toast('error', e.message);
     })
-    .ops_saveTrip(payload);
+    .ops_saveTrip({
+      reqName,
+      reqEmpId    : document.getElementById('nt-req-empid').value.trim(),
+      tripType, purpose,
+      relatedJo   : document.getElementById('nt-related-jo').value.trim(),
+      fromLoc, toLoc, startDate, endDate,
+      vehicleId,
+      plate       : document.getElementById('nt-plate').value.trim(),
+      driverEmpId : document.getElementById('nt-driver-empid').value.trim(),
+      driverName, status
+    });
 }
 </script>
