@@ -1064,17 +1064,38 @@ const DRIVER_COL = {
   LICENSE_EXPIRY : 4,
   CONTACT        : 5,
   STATUS         : 6,
-  NOTES          : 7,
-  LOGIN_EMAIL    : 8
+  NOTES          : 7
 };
 
 function ops_getAllDrivers_() {
   const sh = ops_sh_(OPS_SHEETS.DRIVERS);
   const lr = sh.getLastRow();
   if (lr < 2) return [];
-  return sh.getRange(2, 1, lr - 1, 9).getValues()
+
+  // ✅ Load login emails from LoginUsers (role = driver)
+  var loginMap = {};
+  try {
+    var loginSh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('LoginUsers');
+    if (loginSh && loginSh.getLastRow() >= 2) {
+      loginSh.getRange(2, 1, loginSh.getLastRow() - 1, 3).getValues().forEach(function(r) {
+        if (String(r[2]).trim().toLowerCase() === 'driver') {
+          loginMap[String(r[0]).trim().toLowerCase()] = String(r[0]).trim();
+        }
+      });
+    }
+  } catch(e) {}
+
+  return sh.getRange(2, 1, lr - 1, 8).getValues()
     .filter(function(r) { return r[DRIVER_COL.DRIVER_ID] && String(r[DRIVER_COL.DRIVER_ID]).trim(); })
     .map(function(r) {
+      var driverName = String(r[DRIVER_COL.NAME] || '').trim().toLowerCase();
+      // Match login email by name (first word match)
+      var loginEmail = '';
+      Object.keys(loginMap).forEach(function(em) {
+        if (em.indexOf(driverName.split(' ')[0]) > -1 || driverName.indexOf(em.split('@')[0]) > -1) {
+          loginEmail = loginMap[em];
+        }
+      });
       return {
         driverId      : String(r[DRIVER_COL.DRIVER_ID]).trim(),
         name          : String(r[DRIVER_COL.NAME]           || '').trim(),
@@ -1084,7 +1105,7 @@ function ops_getAllDrivers_() {
         contact       : String(r[DRIVER_COL.CONTACT]        || '').trim(),
         status        : String(r[DRIVER_COL.STATUS]         || 'Active').trim(),
         notes         : String(r[DRIVER_COL.NOTES]          || '').trim(),
-        loginEmail    : String(r[DRIVER_COL.LOGIN_EMAIL]    || '').trim()
+        loginEmail    : loginEmail
       };
     });
 }
@@ -1131,7 +1152,7 @@ function ops_addDriver(payload) {
     const id  = ops_genId_('D', drivers.map(function(d) { return [d.driverId]; }), 0);
     const now = new Date();
 
-    sh.getRange(sh.getLastRow() + 1, 1, 1, 9).setValues([[
+    sh.getRange(sh.getLastRow() + 1, 1, 1, 8).setValues([[
       id,
       payload.name.trim(),
       payload.empId         || '',
@@ -1139,8 +1160,7 @@ function ops_addDriver(payload) {
       payload.licenseExpiry || '',
       payload.contact       || '',
       payload.status        || 'Active',
-      payload.notes         || '',
-      payload.email.trim().toLowerCase()
+      payload.notes         || ''
     ]]);
 
     loginSh.getRange(loginSh.getLastRow() + 1, 1, 1, 3).setValues([[
@@ -1177,7 +1197,7 @@ function ops_updateDriver(payload) {
     });
     if (rowIdx === -1) return { success: false, message: 'Driver not found.' };
 
-    sh.getRange(rowIdx, 1, 1, 9).setValues([[
+    sh.getRange(rowIdx, 1, 1, 8).setValues([[
       payload.driverId,
       payload.name.trim(),
       payload.empId         || '',
@@ -1185,8 +1205,7 @@ function ops_updateDriver(payload) {
       payload.licenseExpiry || '',
       payload.contact       || '',
       payload.status        || 'Active',
-      payload.notes         || '',
-      payload.email         || ''
+      payload.notes         || ''
     ]]);
 
     // ✅ Update LoginUsers if email or password provided
