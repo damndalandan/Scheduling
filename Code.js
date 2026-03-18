@@ -1195,7 +1195,7 @@ function ops_deleteDriver(driverId) {
 function ops_getEmployeeList_() {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sh = ss.getSheetByName('EmployeeName');
+    const sh = ss.getSheetByName('EmployeName');
     if (!sh) return [];
     const lr = sh.getLastRow();
     if (lr < 2) return [];
@@ -1209,7 +1209,7 @@ function ops_getEmployeeList_() {
         };
       });
   } catch(e) {
-    Logger.log('ops_getEmployeeList_ error: ' + e.message);
+    Logger.log('ops_getEmployeList_ error: ' + e.message);
     return [];
   }
 }
