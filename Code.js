@@ -552,16 +552,39 @@ function getDriverDashboardData() {
       Logger.log('Driver name lookup error: ' + e.message);
     }
 
-    // ✅ Filter trips by driverName (case-insensitive trim match)
+    // ✅ Filter trips by driverName — multiple match strategies
     var myTrips = [];
     if (driverName) {
+      var nameLower = driverName.trim().toLowerCase();
       myTrips = allTrips.filter(function(t) {
-        return (t.driverName || '').trim().toLowerCase() === driverName.toLowerCase();
+        var tripDriver = (t.driverName || '').trim().toLowerCase();
+        // Strategy 1: exact match
+        if (tripDriver === nameLower) return true;
+        // Strategy 2: trip driverName contains driver's first name
+        var firstName = nameLower.split(' ')[0];
+        if (firstName.length > 2 && tripDriver.indexOf(firstName) > -1) return true;
+        // Strategy 3: driver name contains first word of trip driverName
+        var tripFirst = tripDriver.split(' ')[0];
+        if (tripFirst.length > 2 && nameLower.indexOf(tripFirst) > -1) return true;
+        return false;
+      });
+    }
+
+    // ✅ FALLBACK: if still empty, try matching by email directly in driverEmpId
+    if (myTrips.length === 0) {
+      myTrips = allTrips.filter(function(t) {
+        return (t.driverEmpId || '').trim().toLowerCase() === email;
       });
     }
 
     // ✅ Debug log — check sa GAS Execution Logs kung mag-fail pa
-    Logger.log('Driver lookup: email=' + email + ' | found name=[' + driverName + '] | trips=' + myTrips.length);
+    Logger.log('=== DRIVER LOOKUP ===');
+    Logger.log('Email: [' + email + ']');
+    Logger.log('Resolved driverName: [' + driverName + ']');
+    Logger.log('Total trips in system: ' + allTrips.length);
+    Logger.log('Matched trips: ' + myTrips.length);
+    var allDriverNames = allTrips.map(function(t) { return '[' + (t.driverName||'') + ']'; }).join(', ');
+    Logger.log('All driverNames in Trips: ' + allDriverNames);
 
     // ✅ EXTRA DEBUG — i-log tanan nga driver names sa Trips sheet para makita ang exact spelling
     var allDriverNames = allTrips.map(function(t) { return '[' + t.driverName + ']'; }).join(', ');
