@@ -494,38 +494,56 @@ function getTripsInitData() {
 // Returns trips assigned to the logged-in driver
 function getDriverDashboardData() {
   try {
-    var user  = ops_getUserInfo_();
-    var email = user.email.toLowerCase().trim();
+    var user     = ops_getUserInfo_();
+    var email    = user.email.toLowerCase().trim();
     var allTrips = ops_getAllTrips_();
 
     var driverName = '';
     try {
-      var loginSh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('LoginUsers');
-      if (loginSh && loginSh.getLastRow() >= 2) {
-        var loginData = loginSh.getRange(2, 1, loginSh.getLastRow() - 1, 3).getValues();
-        var driverSh  = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Drivers');
-        if (driverSh && driverSh.getLastRow() >= 2) {
-          var driverData = driverSh.getRange(2, 1, driverSh.getLastRow() - 1, 8).getValues();
-          // Match by empId stored in Driver sheet col C vs email
-          for (var d = 0; d < driverData.length; d++) {
-            var drEmpId = String(driverData[d][2] || '').trim().toLowerCase();
-            if (drEmpId === email) {
-              driverName = String(driverData[d][1] || '').trim();
-              break;
-            }
-          }
-          // Fallback: match by nth driver login order
-          if (!driverName) {
-            var driverLogins = loginData.filter(function(r) {
-              return String(r[2]).trim().toLowerCase() === 'driver';
+      var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+      // ✅ STEP 1: Find the driver name by matching email in LoginUsers
+      //    then use the ROW INDEX to find corresponding driver in Drivers sheet
+      var loginSh = ss.getSheetByName('LoginUsers');
+      var driverSh = ss.getSheetByName('Drivers');
+
+      if (loginSh && driverSh && loginSh.getLastRow() >= 2 && driverSh.getLastRow() >= 2) {
+        var loginData  = loginSh.getRange(2, 1, loginSh.getLastRow() - 1, 3).getValues();
+        var driverData = driverSh.getRange(2, 1, driverSh.getLastRow() - 1, 8).getValues();
+
+        // ✅ Get only driver-role logins in order
+        var driverLogins = [];
+        for (var i = 0; i < loginData.length; i++) {
+          var rowRole = String(loginData[i][2] || '').trim().toLowerCase();
+          if (rowRole === 'driver') {
+            driverLogins.push({
+              email : String(loginData[i][0] || '').trim().toLowerCase(),
+              index : driverLogins.length  // nth driver login = nth driver in Drivers sheet
             });
-            for (var i = 0; i < driverLogins.length; i++) {
-              if (String(driverLogins[i][0]).trim().toLowerCase() === email) {
-                if (driverData[i]) {
-                  driverName = String(driverData[i][1] || '').trim();
-                }
-                break;
-              }
+          }
+        }
+
+        // ✅ Find which nth driver login matches this email
+        var matchedIndex = -1;
+        for (var j = 0; j < driverLogins.length; j++) {
+          if (driverLogins[j].email === email) {
+            matchedIndex = driverLogins[j].index;
+            break;
+          }
+        }
+
+        // ✅ Get the driver name from Drivers sheet using matched index
+        if (matchedIndex >= 0 && driverData[matchedIndex]) {
+          driverName = String(driverData[matchedIndex][1] || '').trim(); // col B = Full_Name
+        }
+
+        // ✅ FALLBACK: if index match fails, try matching by empId = email directly
+        if (!driverName) {
+          for (var k = 0; k < driverData.length; k++) {
+            var empId = String(driverData[k][2] || '').trim().toLowerCase();
+            if (empId === email) {
+              driverName = String(driverData[k][1] || '').trim();
+              break;
             }
           }
         }
@@ -534,12 +552,16 @@ function getDriverDashboardData() {
       Logger.log('Driver name lookup error: ' + e.message);
     }
 
+    // ✅ Filter trips by driverName (case-insensitive trim match)
     var myTrips = [];
     if (driverName) {
       myTrips = allTrips.filter(function(t) {
         return (t.driverName || '').trim().toLowerCase() === driverName.toLowerCase();
       });
     }
+
+    // ✅ Debug log — check sa GAS Execution Logs kung mag-fail pa
+    Logger.log('Driver lookup: email=' + email + ' | found name=' + driverName + ' | trips=' + myTrips.length);
 
     return {
       success    : true,
