@@ -561,7 +561,11 @@ function getDriverDashboardData() {
     }
 
     // ✅ Debug log — check sa GAS Execution Logs kung mag-fail pa
-    Logger.log('Driver lookup: email=' + email + ' | found name=' + driverName + ' | trips=' + myTrips.length);
+    Logger.log('Driver lookup: email=' + email + ' | found name=[' + driverName + '] | trips=' + myTrips.length);
+
+    // ✅ EXTRA DEBUG — i-log tanan nga driver names sa Trips sheet para makita ang exact spelling
+    var allDriverNames = allTrips.map(function(t) { return '[' + t.driverName + ']'; }).join(', ');
+    Logger.log('All driverNames in Trips sheet: ' + allDriverNames);
 
     return {
       success    : true,
