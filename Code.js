@@ -1291,7 +1291,6 @@ function ops_getEmployeeList_() {
 
 
 // ── PART 2: Replace your existing getTripsInitData() with this ──
-
 function getTripsInitData() {
   try {
     const user      = ops_getUserInfo_();
@@ -1302,7 +1301,8 @@ function getTripsInitData() {
     const joResult  = ops_getJOList();
     const joList    = joResult.success ? joResult.data : [];
     const joError   = joResult.success ? null : joResult.message;
-    return { success: true, user, trips, vehicles, drivers, employees, joList, joError };
+    const tripTypes = ops_getTripTypes_().map(function(r) { return { value: r.value }; });
+    return { success: true, user, trips, vehicles, drivers, employees, joList, joError, tripTypes };
   } catch(e) { return { success: false, message: e.message }; }
 }
 

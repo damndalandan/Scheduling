@@ -55,16 +55,11 @@
       <div class="o-divider">Trip Details</div>
       <div class="o-form-grid" style="margin-bottom:18px;">
         <div class="o-form-group">
-          <label class="o-label">Trip Type *</label>
-          <select id="nt-trip-type" class="o-input">
-            <option value="">-- Select Type --</option>
-            <option>Owner Errand</option>
-            <option>Supplier Delivery - Ormoc</option>
-            <option>Supplier Delivery - Outside Ormoc</option>
-            <option>Signage Installation</option>
-            <option>Other</option>
-          </select>
-        </div>
+  <label class="o-label">Trip Type *</label>
+  <select id="nt-trip-type" class="o-input">
+    <option value="">-- Select Type --</option>
+  </select>
+</div>
         <div class="o-form-group" style="position:relative;">
           <label class="o-label">Related JO <span style="color:var(--text3);font-weight:400;">(optional)</span></label>
           <div style="position:relative;">
@@ -214,6 +209,9 @@ function init_new_trip() {
       // Vehicles
       nt_vehicles = (r.vehicles || []).filter(function(v) { return v.status === 'Active'; });
       nt_populateVehicles();
+      // Vehicles
+      // Trip Types — dynamic from Settings sheet
+      nt_populateTripTypes(r.tripTypes || []);
 
       // Drivers (Active only) from Driver Master
       nt_drivers        = (r.drivers || []).filter(function(d) { return d.status === 'Active'; });
@@ -408,6 +406,18 @@ function nt_populateVehicles() {
         return '<option value="' + o_esc(v.vehicleId) + '" data-plate="' + o_esc(v.plate) + '">'
           + o_esc(v.plate) + ' — ' + o_esc(v.type) + (v.brand ? ' (' + o_esc(v.brand) + ')' : '')
           + '</option>';
+      }).join('');
+}
+
+function nt_populateTripTypes(types) {
+  var sel = document.getElementById('nt-trip-type');
+  if (!types.length) {
+    sel.innerHTML = '<option value="">-- No trip types found --</option>';
+    return;
+  }
+  sel.innerHTML = '<option value="">-- Select Type --</option>'
+    + types.map(function(t) {
+        return '<option value="' + o_esc(t.value) + '">' + o_esc(t.value) + '</option>';
       }).join('');
 }
 
