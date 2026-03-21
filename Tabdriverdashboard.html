@@ -296,22 +296,18 @@ function drv_loadData() {
       o_setReloading('drv-reload-btn', false);
       if (!r.success) { o_toast('error', r.message || 'Load failed'); return; }
 
-      // Filter only trips where this user is the driver
-      // We match by email stored in driverEmpId OR by driverName
-      var userEmail = (document.getElementById('o-user-email').textContent || '').toLowerCase().trim();
-      drv_trips = (r.trips || []).filter(function(t) {
-        var empId = (t.driverEmpId || '').toLowerCase();
-        var name  = (t.driverName  || '').toLowerCase();
-        // Match by driverEmpId containing email, or driver email stored
-        return empId === userEmail || empId.indexOf(userEmail) > -1
-          || (userEmail && name.length > 0 && r.driverEmail && r.driverEmail.toLowerCase() === userEmail);
-      });
+      // ✅ Backend already filtered correctly — use r.trips directly
+      drv_trips = r.trips || [];
 
-      // If no email match, show all assigned trips (fallback for name-based systems)
-      if (drv_trips.length === 0 && r.trips) {
-        drv_trips = r.trips.filter(function(t) {
-          return t.driverName && t.driverName.trim() !== '';
-        });
+      // ✅ Show driver name in subtitle
+      if (r.driverName) {
+        var subtitle = document.querySelector('#tab-driver-dashboard p');
+        if (subtitle) subtitle.textContent = 'Welcome, ' + r.driverName + ' — imong mga assigned trips';
+      }
+
+      // ✅ Show toast if no trips yet
+      if (drv_trips.length === 0) {
+        o_toast('info', 'Wala pay assigned trips sa imo.');
       }
 
       drv_renderStats();

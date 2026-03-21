@@ -495,24 +495,58 @@ function getTripsInitData() {
 function getDriverDashboardData() {
   try {
     var user  = ops_getUserInfo_();
-    var email = user.email.toLowerCase();
+    var email = user.email.toLowerCase().trim();
     var allTrips = ops_getAllTrips_();
 
-    // Filter trips where driverEmpId matches email OR driver name contains part of email
-    var myTrips = allTrips.filter(function(t) {
-      var dEmpId = (t.driverEmpId || '').toLowerCase().trim();
-      return dEmpId === email;
-    });
+    var driverName = '';
+    try {
+      var loginSh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('LoginUsers');
+      if (loginSh && loginSh.getLastRow() >= 2) {
+        var loginData = loginSh.getRange(2, 1, loginSh.getLastRow() - 1, 3).getValues();
+        var driverSh  = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Drivers');
+        if (driverSh && driverSh.getLastRow() >= 2) {
+          var driverData = driverSh.getRange(2, 1, driverSh.getLastRow() - 1, 8).getValues();
+          // Match by empId stored in Driver sheet col C vs email
+          for (var d = 0; d < driverData.length; d++) {
+            var drEmpId = String(driverData[d][2] || '').trim().toLowerCase();
+            if (drEmpId === email) {
+              driverName = String(driverData[d][1] || '').trim();
+              break;
+            }
+          }
+          // Fallback: match by nth driver login order
+          if (!driverName) {
+            var driverLogins = loginData.filter(function(r) {
+              return String(r[2]).trim().toLowerCase() === 'driver';
+            });
+            for (var i = 0; i < driverLogins.length; i++) {
+              if (String(driverLogins[i][0]).trim().toLowerCase() === email) {
+                if (driverData[i]) {
+                  driverName = String(driverData[i][1] || '').trim();
+                }
+                break;
+              }
+            }
+          }
+        }
+      }
+    } catch(e) {
+      Logger.log('Driver name lookup error: ' + e.message);
+    }
 
-    // Fallback: if no exact email match, return all trips assigned to any driver
-    // (for name-based systems where driverEmpId is not an email)
-    // Admin can configure driverEmpId to store email for precise filtering
+    var myTrips = [];
+    if (driverName) {
+      myTrips = allTrips.filter(function(t) {
+        return (t.driverName || '').trim().toLowerCase() === driverName.toLowerCase();
+      });
+    }
 
     return {
-      success     : true,
-      trips       : myTrips,
-      driverEmail : email,
-      user        : user
+      success    : true,
+      trips      : myTrips,
+      driverName : driverName,
+      driverEmail: email,
+      user       : user
     };
   } catch(e) {
     return { success: false, message: e.message };
