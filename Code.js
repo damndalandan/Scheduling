@@ -537,10 +537,11 @@ function getDriverDashboardData() {
 
       // ✅ STEP 2: Match trips — try ALL strategies
       if (driverName) {
-        var n = driverName.toLowerCase();
+        var n = driverName.toLowerCase().replace(/\s+/g, ' ').trim();
 
         myTrips = allTrips.filter(function(t) {
-          var td = (t.driverName || '').trim().toLowerCase();
+          // ✅ Normalize spaces in trip driver name too
+          var td = (t.driverName || '').toLowerCase().replace(/\s+/g, ' ').trim();
 
           // Exact match
           if (td === n) return true;
