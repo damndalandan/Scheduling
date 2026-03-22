@@ -700,7 +700,16 @@ function getReportsInitData() {
     const trips    = ops_getAllTrips_();
     const vehicles = ops_getAllVehicles_();
     const report   = ops_buildReports_(trips, vehicles);
-    return { success: true, user, report };
+ 
+    // ✅ Pass rawTrips + rawVehicles so frontend can filter by period
+    //    and look up brand names from vehicleId/plate
+    return {
+      success     : true,
+      user,
+      report,
+      rawTrips    : trips,      // full trip list for period filtering
+      rawVehicles : vehicles    // vehicle list for brand name lookup
+    };
   } catch(e) { return { success: false, message: e.message }; }
 }
 

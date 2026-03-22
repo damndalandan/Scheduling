@@ -1,67 +1,186 @@
-<!-- TabReports.html — Reports Tab -->
+<!-- TabReports.html — Reports Tab (Updated) -->
 <style>
   #tab-reports, #tab-reports * { color: var(--text); }
   .rpt-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
   @media (max-width: 768px) { .rpt-grid { grid-template-columns: 1fr; } }
-  .rpt-bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; }
-  .rpt-bar-label { width: 140px; font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; }
+
+  /* Bar chart */
+  .rpt-bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .rpt-bar-label { width: 160px; font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; }
   .rpt-bar-track { flex: 1; height: 10px; background: var(--surface2); border-radius: 9999px; overflow: hidden; }
-  .rpt-bar-fill  { height: 100%; border-radius: 9999px; background: var(--accent); transition: width .5s ease; }
-  .rpt-bar-val   { font-size: 12px; font-family: 'DM Mono', monospace; color: var(--text2); width: 50px; text-align: right; }
+  .rpt-bar-fill  { height: 100%; border-radius: 9999px; background: var(--accent); transition: width .6s cubic-bezier(.22,1,.36,1); }
+  .rpt-bar-val   { font-size: 11px; font-family: 'DM Mono', monospace; color: var(--text2); min-width: 90px; text-align: right; line-height: 1.4; }
+
+  /* Period filter tabs */
+  .rpt-period-tabs {
+    display: flex; gap: 4px;
+    background: var(--surface2); border-radius: 9px; padding: 3px;
+    width: fit-content;
+  }
+  .rpt-period-tab {
+    padding: 5px 14px; border-radius: 7px; font-size: 12px; font-weight: 700;
+    cursor: pointer; transition: all .15s; color: var(--text3);
+    font-family: 'DM Sans', sans-serif; border: none; background: none;
+  }
+  .rpt-period-tab.active { background: var(--accent); color: #0f1117; }
+  .rpt-period-tab:hover:not(.active) { color: var(--accent); }
+
+  /* Brand summary cards */
+  .rpt-brand-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px;
+  }
+  .rpt-brand-card {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px; transition: border-color .15s;
+  }
+  .rpt-brand-card:hover { border-color: var(--amber-bd); }
+  .rpt-brand-icon {
+    width: 32px; height: 32px; background: var(--amber-bg); border: 1px solid var(--amber-bd);
+    border-radius: 8px; display: flex; align-items: center; justify-content: center;
+    margin-bottom: 10px;
+  }
+  .rpt-brand-name { font-size: 13px; font-weight: 800; color: var(--text); margin-bottom: 6px; }
+  .rpt-brand-stat { font-size: 11px; color: var(--text3); display: flex; justify-content: space-between; margin-bottom: 3px; }
+  .rpt-brand-stat span { font-weight: 700; color: var(--text2); font-family: 'DM Mono', monospace; }
+
+  /* Date range display */
+  .rpt-date-range {
+    font-size: 11px; color: var(--text3); font-weight: 600; margin-top: 4px;
+  }
+
+  /* Section header */
+  .rpt-section-hdr {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 14px; flex-wrap: wrap; gap: 8px;
+  }
+
+  /* Skeleton */
+  .rpt-skel { width: 100%; height: 160px; border-radius: 12px; }
 </style>
 
 <div style="padding:24px 28px 40px;">
 
-  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:22px;">
+  <!-- Header -->
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:20px;flex-wrap:wrap;">
     <div>
       <h2 style="font-size:20px;font-weight:800;letter-spacing:-.02em;margin:0 0 3px;">Reports</h2>
       <p style="font-size:13px;color:var(--text3);margin:0;">Fleet analytics ug summaries</p>
     </div>
-    <button id="rpt-reload-btn" class="o-btn-reload" onclick="rpt_reload()">
-      <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-      </svg>
-      Reload
-    </button>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+
+      <!-- Period filter -->
+      <div class="rpt-period-tabs" id="rpt-period-tabs">
+        <button class="rpt-period-tab active" data-period="all"     onclick="rpt_setPeriod('all',this)">All</button>
+        <button class="rpt-period-tab"        data-period="daily"   onclick="rpt_setPeriod('daily',this)">Daily</button>
+        <button class="rpt-period-tab"        data-period="weekly"  onclick="rpt_setPeriod('weekly',this)">Weekly</button>
+        <button class="rpt-period-tab"        data-period="monthly" onclick="rpt_setPeriod('monthly',this)">Monthly</button>
+        <button class="rpt-period-tab"        data-period="yearly"  onclick="rpt_setPeriod('yearly',this)">Yearly</button>
+      </div>
+
+      <button id="rpt-reload-btn" class="o-btn-reload" onclick="rpt_reload()">
+        <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+        </svg>
+        Reload
+      </button>
+    </div>
   </div>
 
-  <div id="rpt-loading" style="padding:40px 0;text-align:center;color:var(--text3);">
-    <div class="o-skel" style="width:100%;height:140px;border-radius:12px;margin-bottom:16px;"></div>
-    <div class="o-skel" style="width:100%;height:140px;border-radius:12px;"></div>
+  <!-- Active period display -->
+  <div id="rpt-period-display" style="display:none;margin-bottom:16px;">
+    <div class="o-alert o-alert-info" style="padding:8px 14px;font-size:12px;width:fit-content;">
+      📅 <span id="rpt-period-label"></span>
+    </div>
   </div>
 
+  <!-- Loading state -->
+  <div id="rpt-loading">
+    <div class="rpt-grid" style="margin-bottom:16px;">
+      <div class="o-skel rpt-skel"></div>
+      <div class="o-skel rpt-skel"></div>
+    </div>
+    <div class="rpt-grid">
+      <div class="o-skel rpt-skel"></div>
+      <div class="o-skel rpt-skel"></div>
+    </div>
+  </div>
+
+  <!-- Main content -->
   <div id="rpt-content" style="display:none;">
 
-    <!-- Row 1: By Vehicle + By Driver -->
+    <!-- ── ROW 1: Trips by Brand + Trips by Driver ── -->
     <div class="rpt-grid" style="margin-bottom:16px;">
+
+      <!-- Trips by Brand (was: Trips by Vehicle/Plate) -->
       <div class="o-card" style="padding:18px;">
-        <div class="o-section-title">Trips by Vehicle</div>
-        <div id="rpt-by-vehicle"></div>
+        <div class="rpt-section-hdr">
+          <div class="o-section-title" style="margin:0;">🚗 Trips by Vehicle Brand</div>
+        </div>
+        <div id="rpt-by-brand"></div>
       </div>
+
+      <!-- Trips by Driver -->
       <div class="o-card" style="padding:18px;">
-        <div class="o-section-title">Trips by Driver</div>
+        <div class="rpt-section-hdr">
+          <div class="o-section-title" style="margin:0;">👤 Trips by Driver</div>
+        </div>
         <div id="rpt-by-driver"></div>
       </div>
+
     </div>
 
-    <!-- Row 2: By Type + Mileage Summary -->
+    <!-- ── ROW 2: Trips by Type + Brand Summary Cards ── -->
     <div class="rpt-grid" style="margin-bottom:16px;">
+
+      <!-- Trips by Type -->
       <div class="o-card" style="padding:18px;">
-        <div class="o-section-title">Trips by Type</div>
+        <div class="rpt-section-hdr">
+          <div class="o-section-title" style="margin:0;">🏷️ Trips by Type</div>
+        </div>
         <div id="rpt-by-type"></div>
       </div>
+
+      <!-- Vehicle Mileage Summary — brand name, total mileage only (no beg. mileage) -->
       <div class="o-card" style="padding:18px;">
-        <div class="o-section-title">Vehicle Mileage Summary</div>
+        <div class="rpt-section-hdr">
+          <div class="o-section-title" style="margin:0;">📍 Vehicle Mileage Summary</div>
+        </div>
         <div id="rpt-mileage"></div>
       </div>
+
+    </div>
+
+    <!-- ── ROW 3: Brand Summary — Total trips & mileage per brand ── -->
+    <div class="o-card" style="padding:18px;margin-bottom:16px;">
+      <div class="rpt-section-hdr">
+        <div class="o-section-title" style="margin:0;">🚘 Summary per Brand</div>
+        <span style="font-size:11px;color:var(--text3);">Total trips ug total mileage per vehicle brand</span>
+      </div>
+      <div id="rpt-brand-cards" class="rpt-brand-grid"></div>
+    </div>
+
+    <!-- ── ROW 4: Schedule / Trip Timeline ── -->
+    <div class="o-card" style="padding:18px;">
+      <div class="rpt-section-hdr">
+        <div class="o-section-title" style="margin:0;">📅 Trip Schedule</div>
+        <span id="rpt-schedule-count" style="font-size:11px;color:var(--text3);"></span>
+      </div>
+      <div id="rpt-schedule"></div>
     </div>
 
   </div>
 </div>
 
 <script>
-var rpt_data = null;
+var rpt_rawTrips   = [];
+var rpt_rawVehicles = [];
+var rpt_period     = 'all';
+var RPT_TODAY      = new Date();
 
+// ══════════════════════════════════════════════════
+//  INIT & RELOAD
+// ══════════════════════════════════════════════════
 function init_reports() {
   document.getElementById('rpt-loading').style.display  = 'block';
   document.getElementById('rpt-content').style.display  = 'none';
@@ -69,8 +188,14 @@ function init_reports() {
     .withSuccessHandler(function(r) {
       o_setReloading('rpt-reload-btn', false);
       if (!r.success) { o_toast('error', r.message); return; }
-      rpt_data = r.report;
-      rpt_render();
+      rpt_rawTrips    = r.rawTrips    || r.report._rawTrips    || [];
+      rpt_rawVehicles = r.rawVehicles || r.report._rawVehicles || [];
+      // fallback: build from report object if raw not available
+      if (!rpt_rawTrips.length && r.report) {
+        rpt_fromReport(r.report, r.vehicles || []);
+      } else {
+        rpt_render();
+      }
     })
     .withFailureHandler(function(e) {
       o_setReloading('rpt-reload-btn', false);
@@ -79,71 +204,402 @@ function init_reports() {
     .getReportsInitData();
 }
 
+// Fallback: rebuild from report summary + vehicles list
+function rpt_fromReport(report, vehicles) {
+  // We don't have raw trips — use aggregated data
+  rpt_rawVehicles = vehicles || [];
+  rpt_renderFromReport(report, vehicles);
+}
+
 function rpt_reload() {
   o_setReloading('rpt-reload-btn', true);
   initializedTabs['reports'] = false;
   init_reports();
 }
 
+// ══════════════════════════════════════════════════
+//  PERIOD FILTER
+// ══════════════════════════════════════════════════
+function rpt_setPeriod(p, btn) {
+  rpt_period = p;
+  document.querySelectorAll('.rpt-period-tab').forEach(function(b) { b.classList.remove('active'); });
+  btn.classList.add('active');
+
+  var dispEl  = document.getElementById('rpt-period-display');
+  var labelEl = document.getElementById('rpt-period-label');
+  if (p === 'all') {
+    dispEl.style.display = 'none';
+  } else {
+    dispEl.style.display = 'block';
+    var range = rpt_getPeriodRange(p);
+    labelEl.textContent = rpt_formatPeriodLabel(p, range);
+  }
+  rpt_render();
+}
+
+function rpt_getPeriodRange(period) {
+  var now   = new Date();
+  var start = new Date();
+  var end   = new Date();
+  if (period === 'daily') {
+    start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+    end   = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+  } else if (period === 'weekly') {
+    var dow = now.getDay();
+    start = new Date(now.getTime() - dow * 86400000);
+    start.setHours(0, 0, 0, 0);
+    end = new Date(start.getTime() + 6 * 86400000);
+    end.setHours(23, 59, 59, 999);
+  } else if (period === 'monthly') {
+    start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0);
+    end   = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+  } else if (period === 'yearly') {
+    start = new Date(now.getFullYear(), 0, 1, 0, 0, 0);
+    end   = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
+  }
+  return { start: start, end: end };
+}
+
+function rpt_formatPeriodLabel(period, range) {
+  var mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  if (period === 'daily') {
+    return 'Today: ' + mo[range.start.getMonth()] + ' ' + range.start.getDate() + ', ' + range.start.getFullYear();
+  } else if (period === 'weekly') {
+    return 'This Week: ' + mo[range.start.getMonth()] + ' ' + range.start.getDate()
+      + ' – ' + mo[range.end.getMonth()] + ' ' + range.end.getDate() + ', ' + range.end.getFullYear();
+  } else if (period === 'monthly') {
+    return 'This Month: ' + mo[range.start.getMonth()] + ' ' + range.start.getFullYear();
+  } else if (period === 'yearly') {
+    return 'This Year: ' + range.start.getFullYear();
+  }
+  return '';
+}
+
+// ── Filter trips by period ──
+function rpt_filterByPeriod(trips) {
+  if (rpt_period === 'all') return trips;
+  var range = rpt_getPeriodRange(rpt_period);
+  return trips.filter(function(t) {
+    // Use requestDate or startDate for filtering
+    var rawDate = t.requestDate || t.startDate || '';
+    if (!rawDate) return false;
+    var d = new Date(rawDate);
+    if (isNaN(d.getTime())) return false;
+    return d >= range.start && d <= range.end;
+  });
+}
+
+// ══════════════════════════════════════════════════
+//  RENDER — uses raw trips if available
+// ══════════════════════════════════════════════════
 function rpt_render() {
-  if (!rpt_data) return;
+  if (!rpt_rawTrips.length && !rpt_rawVehicles.length) return;
   document.getElementById('rpt-loading').style.display = 'none';
   document.getElementById('rpt-content').style.display = 'block';
 
-  rpt_renderBarChart('rpt-by-vehicle', rpt_data.byVehicle,  function(v) { return v.count + ' trips · ' + Math.round(v.km) + ' km'; }, function(v) { return v.count; });
-  rpt_renderBarChart('rpt-by-driver',  rpt_data.byDriver,   function(v) { return v.count + ' trips · ' + Math.round(v.km) + ' km'; }, function(v) { return v.count; });
-  rpt_renderTypeChart('rpt-by-type',   rpt_data.byType);
-  rpt_renderMileage('rpt-mileage',     rpt_data.mileageSummary);
+  var trips    = rpt_filterByPeriod(rpt_rawTrips);
+  var vehicles = rpt_rawVehicles;
+
+  // Build brand map from vehicles: vehicleId → brand
+  var brandMap = {};
+  vehicles.forEach(function(v) {
+    brandMap[v.vehicleId] = (v.brand || v.plate || v.vehicleId).toUpperCase();
+  });
+  // Also map by plate → brand
+  var plateMap = {};
+  vehicles.forEach(function(v) {
+    plateMap[v.plate] = (v.brand || v.plate || v.vehicleId).toUpperCase();
+    plateMap[v.vehicleId] = (v.brand || v.plate || v.vehicleId).toUpperCase();
+  });
+
+  // ── Build aggregations ──
+  var byBrand  = {};   // brand → { count, km, plates: [] }
+  var byDriver = {};   // driverName → { count, km }
+  var byType   = {};   // tripType → count
+
+  var completed = trips.filter(function(t) { return t.status === 'Completed'; });
+
+  completed.forEach(function(t) {
+    // Brand
+    var brand = plateMap[t.vehicleId] || plateMap[t.plate] || (t.plate || 'Unknown').toUpperCase();
+    if (!byBrand[brand]) byBrand[brand] = { count: 0, km: 0, plates: [] };
+    byBrand[brand].count++;
+    byBrand[brand].km += (parseFloat(t.distance) || 0);
+    if (t.plate && byBrand[brand].plates.indexOf(t.plate) === -1) byBrand[brand].plates.push(t.plate);
+
+    // Driver
+    var drv = t.driverName || 'Unknown';
+    if (!byDriver[drv]) byDriver[drv] = { count: 0, km: 0 };
+    byDriver[drv].count++;
+    byDriver[drv].km += (parseFloat(t.distance) || 0);
+  });
+
+  // By type — ALL trips (not just completed)
+  trips.forEach(function(t) {
+    if (!t.tripType) return;
+    byType[t.tripType] = (byType[t.tripType] || 0) + 1;
+  });
+
+  // ── Render each section ──
+  rpt_renderBrandBars('rpt-by-brand', byBrand);
+  rpt_renderDriverBars('rpt-by-driver', byDriver);
+  rpt_renderTypeBars('rpt-by-type', byType);
+  rpt_renderMileageTable(vehicles, byBrand, brandMap, plateMap);
+  rpt_renderBrandCards(byBrand);
+  rpt_renderSchedule(trips);
 }
 
-function rpt_renderBarChart(elId, data, labelFn, valFn) {
-  var el = document.getElementById(elId);
-  var entries = Object.entries(data || {});
-  if (!entries.length) { el.innerHTML = '<div class="o-empty"><p>Walay data.</p></div>'; return; }
-  entries.sort(function(a, b) { return valFn(b[1]) - valFn(a[1]); });
-  var max = Math.max.apply(null, entries.map(function(e) { return valFn(e[1]); }));
+// ── Fallback render (no raw trips) ──
+function rpt_renderFromReport(report, vehicles) {
+  document.getElementById('rpt-loading').style.display = 'none';
+  document.getElementById('rpt-content').style.display = 'block';
+
+  // Build brand map
+  var plateMap = {};
+  (vehicles || []).forEach(function(v) {
+    plateMap[v.plate]     = (v.brand || v.plate).toUpperCase();
+    plateMap[v.vehicleId] = (v.brand || v.plate).toUpperCase();
+  });
+
+  // Convert plate-keyed byVehicle to brand-keyed byBrand
+  var byBrand = {};
+  Object.keys(report.byVehicle || {}).forEach(function(plate) {
+    var brand = plateMap[plate] || plate.toUpperCase();
+    if (!byBrand[brand]) byBrand[brand] = { count: 0, km: 0, plates: [] };
+    byBrand[brand].count += report.byVehicle[plate].count;
+    byBrand[brand].km    += report.byVehicle[plate].km;
+    if (byBrand[brand].plates.indexOf(plate) === -1) byBrand[brand].plates.push(plate);
+  });
+
+  rpt_renderBrandBars('rpt-by-brand', byBrand);
+  rpt_renderDriverBars('rpt-by-driver', report.byDriver || {});
+  rpt_renderTypeBars('rpt-by-type', report.byType || {});
+  rpt_renderMileageTableFromSummary(report.mileageSummary || [], plateMap);
+  rpt_renderBrandCards(byBrand);
+  rpt_renderSchedule([]);
+  o_toast('info', 'Tip: I-upgrade ang getReportsInitData() para ma-support ang period filter.');
+}
+
+// ══════════════════════════════════════════════════
+//  BAR CHARTS
+// ══════════════════════════════════════════════════
+function rpt_renderBrandBars(elId, byBrand) {
+  var el      = document.getElementById(elId);
+  var entries = Object.entries(byBrand);
+  if (!entries.length) {
+    el.innerHTML = '<div class="o-empty"><p>Walay data.</p></div>';
+    return;
+  }
+  entries.sort(function(a, b) { return b[1].count - a[1].count; });
+  var maxCount = entries[0][1].count;
+
   el.innerHTML = entries.map(function(e) {
-    var pct = max > 0 ? (valFn(e[1]) / max * 100) : 0;
+    var pct = maxCount > 0 ? (e[1].count / maxCount * 100) : 0;
     return '<div class="rpt-bar-row">'
       + '<div class="rpt-bar-label" title="' + o_esc(e[0]) + '">' + o_esc(e[0]) + '</div>'
       + '<div class="rpt-bar-track"><div class="rpt-bar-fill" style="width:' + pct + '%;"></div></div>'
-      + '<div class="rpt-bar-val">' + labelFn(e[1]) + '</div>'
+      + '<div class="rpt-bar-val">' + e[1].count + ' trip' + (e[1].count !== 1 ? 's' : '')
+      +   '<br><span style="color:var(--accent);">' + Math.round(e[1].km) + ' km</span></div>'
       + '</div>';
   }).join('');
 }
 
-function rpt_renderTypeChart(elId, data) {
-  var el = document.getElementById(elId);
-  var entries = Object.entries(data || {});
-  if (!entries.length) { el.innerHTML = '<div class="o-empty"><p>Walay data.</p></div>'; return; }
-  var total = entries.reduce(function(s, e) { return s + e[1]; }, 0);
-  entries.sort(function(a, b) { return b[1] - a[1]; });
-  var colors = ['var(--accent)', 'var(--blue)', 'var(--green)', 'var(--purple)', 'var(--red)'];
-  el.innerHTML = entries.map(function(e, i) {
-    var pct = total > 0 ? Math.round(e[1] / total * 100) : 0;
+function rpt_renderDriverBars(elId, byDriver) {
+  var el      = document.getElementById(elId);
+  var entries = Object.entries(byDriver);
+  if (!entries.length) {
+    el.innerHTML = '<div class="o-empty"><p>Walay data.</p></div>';
+    return;
+  }
+  entries.sort(function(a, b) { return b[1].count - a[1].count; });
+  var maxCount = entries[0][1].count;
+
+  el.innerHTML = entries.map(function(e) {
+    var pct = maxCount > 0 ? (e[1].count / maxCount * 100) : 0;
     return '<div class="rpt-bar-row">'
       + '<div class="rpt-bar-label" title="' + o_esc(e[0]) + '">' + o_esc(e[0]) + '</div>'
-      + '<div class="rpt-bar-track"><div class="rpt-bar-fill" style="width:' + (e[1]/entries[0][1]*100) + '%;background:' + (colors[i] || 'var(--accent)') + ';"></div></div>'
-      + '<div class="rpt-bar-val" style="color:' + (colors[i] || 'var(--accent)') + ';">' + e[1] + ' (' + pct + '%)</div>'
+      + '<div class="rpt-bar-track"><div class="rpt-bar-fill" style="width:' + pct + '%;"></div></div>'
+      + '<div class="rpt-bar-val">' + e[1].count + ' trip' + (e[1].count !== 1 ? 's' : '')
+      +   '<br><span style="color:var(--accent);">' + Math.round(e[1].km) + ' km</span></div>'
       + '</div>';
   }).join('');
 }
 
-function rpt_renderMileage(elId, data) {
-  var el = document.getElementById(elId);
-  if (!data || !data.length) { el.innerHTML = '<div class="o-empty"><p>Walay data.</p></div>'; return; }
+function rpt_renderTypeBars(elId, byType) {
+  var el      = document.getElementById(elId);
+  var entries = Object.entries(byType);
+  if (!entries.length) {
+    el.innerHTML = '<div class="o-empty"><p>Walay data.</p></div>';
+    return;
+  }
+  var total   = entries.reduce(function(s, e) { return s + e[1]; }, 0);
+  entries.sort(function(a, b) { return b[1] - a[1]; });
+  var colors  = ['var(--accent)','var(--blue)','var(--green)','var(--purple)','var(--red)','var(--yellow)'];
+
+  el.innerHTML = entries.map(function(e, i) {
+    var pct     = entries[0][1] > 0 ? (e[1] / entries[0][1] * 100) : 0;
+    var totalPct= total > 0 ? Math.round(e[1] / total * 100) : 0;
+    return '<div class="rpt-bar-row">'
+      + '<div class="rpt-bar-label" title="' + o_esc(e[0]) + '">' + o_esc(e[0]) + '</div>'
+      + '<div class="rpt-bar-track"><div class="rpt-bar-fill" style="width:' + pct + '%;background:' + (colors[i] || 'var(--accent)') + ';"></div></div>'
+      + '<div class="rpt-bar-val" style="color:' + (colors[i] || 'var(--accent)') + ';">'
+      + e[1] + ' (' + totalPct + '%)</div>'
+      + '</div>';
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════
+//  MILEAGE TABLE — brand name, total mileage only
+// ══════════════════════════════════════════════════
+function rpt_renderMileageTable(vehicles, byBrand, brandMap, plateMap) {
+  var el = document.getElementById('rpt-mileage');
+
+  // Build per-vehicle rows grouped by brand
+  var rows = vehicles.map(function(v) {
+    var brand = (v.brand || v.plate || v.vehicleId).toUpperCase();
+    var totalKm = 0;
+    // Sum completed km for this plate
+    if (byBrand[brand]) totalKm = byBrand[brand].km;
+    // Try per-vehicle if byBrand aggregated across multiple
+    return { brand: brand, plate: v.plate, totalKm: totalKm };
+  });
+
+  if (!rows.length) {
+    el.innerHTML = '<div class="o-empty"><p>Walay data.</p></div>';
+    return;
+  }
+
   el.innerHTML = '<div class="o-table-wrap" style="border:none;">'
     + '<table class="o-table" style="font-size:12px;">'
-    + '<thead><tr><th>Plate</th><th>Brand</th><th>Beg. KM</th><th>Recorded KM</th></tr></thead>'
+    + '<thead><tr>'
+    + '<th>Brand</th>'
+    + '<th>Plate</th>'
+    + '<th>Total KM</th>'
+    + '</tr></thead>'
     + '<tbody>'
-    + data.map(function(v) {
+    + rows.map(function(v) {
         return '<tr>'
-          + '<td style="font-weight:700;">' + o_esc(v.plate) + '</td>'
-          + '<td style="color:var(--text3);">' + o_esc(v.brand || '—') + '</td>'
-          + '<td class="mono">' + (v.begMileage || 0).toLocaleString() + '</td>'
-          + '<td class="mono" style="color:var(--accent);">' + Math.round(v.recordedKm).toLocaleString() + ' km</td>'
+          + '<td style="font-weight:700;color:var(--text);">' + o_esc(v.brand) + '</td>'
+          + '<td style="font-family:DM Mono,monospace;font-size:11px;color:var(--text3);">' + o_esc(v.plate) + '</td>'
+          + '<td><span style="font-family:DM Mono,monospace;font-weight:800;color:var(--accent);">'
+          + Math.round(v.totalKm).toLocaleString() + ' km</span></td>'
           + '</tr>';
       }).join('')
     + '</tbody></table></div>';
+}
+
+function rpt_renderMileageTableFromSummary(summary, plateMap) {
+  var el = document.getElementById('rpt-mileage');
+  if (!summary.length) { el.innerHTML = '<div class="o-empty"><p>Walay data.</p></div>'; return; }
+
+  el.innerHTML = '<div class="o-table-wrap" style="border:none;">'
+    + '<table class="o-table" style="font-size:12px;">'
+    + '<thead><tr><th>Brand</th><th>Plate</th><th>Total KM</th></tr></thead>'
+    + '<tbody>'
+    + summary.map(function(v) {
+        var brand = (v.brand || v.plate || '').toUpperCase();
+        return '<tr>'
+          + '<td style="font-weight:700;color:var(--text);">' + o_esc(brand) + '</td>'
+          + '<td style="font-family:DM Mono,monospace;font-size:11px;color:var(--text3);">' + o_esc(v.plate) + '</td>'
+          + '<td><span style="font-family:DM Mono,monospace;font-weight:800;color:var(--accent);">'
+          + Math.round(v.recordedKm).toLocaleString() + ' km</span></td>'
+          + '</tr>';
+      }).join('')
+    + '</tbody></table></div>';
+}
+
+// ══════════════════════════════════════════════════
+//  BRAND SUMMARY CARDS
+// ══════════════════════════════════════════════════
+function rpt_renderBrandCards(byBrand) {
+  var el      = document.getElementById('rpt-brand-cards');
+  var entries = Object.entries(byBrand);
+  if (!entries.length) {
+    el.innerHTML = '<div class="o-empty" style="grid-column:1/-1;"><p>Walay completed trips pa.</p></div>';
+    return;
+  }
+  entries.sort(function(a, b) { return b[1].count - a[1].count; });
+
+  el.innerHTML = entries.map(function(e) {
+    var brand   = e[0];
+    var data    = e[1];
+    var avgKm   = data.count > 0 ? (data.km / data.count).toFixed(1) : 0;
+    var plates  = data.plates.join(', ');
+    return '<div class="rpt-brand-card">'
+      + '<div class="rpt-brand-icon">'
+      +   '<svg width="16" height="16" fill="none" stroke="var(--accent)" viewBox="0 0 24 24">'
+      +     '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 17a2 2 0 100-4 2 2 0 000 4zm8 0a2 2 0 100-4 2 2 0 000 4zM3 10l2-5h14l2 5M3 10h18v5H3z"/>'
+      +   '</svg>'
+      + '</div>'
+      + '<div class="rpt-brand-name">' + o_esc(brand) + '</div>'
+      + '<div class="rpt-brand-stat">Total Trips <span>' + data.count + '</span></div>'
+      + '<div class="rpt-brand-stat">Total KM <span>' + Math.round(data.km).toLocaleString() + ' km</span></div>'
+      + '<div class="rpt-brand-stat">Avg per Trip <span>' + avgKm + ' km</span></div>'
+      + (plates ? '<div style="font-size:10px;color:var(--text3);margin-top:6px;font-family:DM Mono,monospace;">' + o_esc(plates) + '</div>' : '')
+      + '</div>';
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════
+//  TRIP SCHEDULE TABLE
+// ══════════════════════════════════════════════════
+function rpt_renderSchedule(trips) {
+  var el = document.getElementById('rpt-schedule');
+  var countEl = document.getElementById('rpt-schedule-count');
+
+  // Sort by start date descending (most recent first)
+  var sorted = trips.slice().sort(function(a, b) {
+    var da = new Date(a.startDate || a.requestDate || 0);
+    var db = new Date(b.startDate || b.requestDate || 0);
+    return db - da;
+  });
+
+  countEl.textContent = sorted.length + ' trip' + (sorted.length !== 1 ? 's' : '');
+
+  if (!sorted.length) {
+    el.innerHTML = '<div class="o-empty"><div class="o-empty-icon">📅</div><p>Walay trips sa piniling period.</p></div>';
+    return;
+  }
+
+  el.innerHTML = '<div class="o-table-wrap" style="border:none;">'
+    + '<table class="o-table" style="font-size:12px;">'
+    + '<thead><tr>'
+    + '<th>Trip ID</th>'
+    + '<th>Start Date</th>'
+    + '<th>End Date</th>'
+    + '<th>Requestor</th>'
+    + '<th>Route</th>'
+    + '<th>Vehicle Brand</th>'
+    + '<th>Driver</th>'
+    + '<th>Status</th>'
+    + '<th>KM</th>'
+    + '</tr></thead>'
+    + '<tbody>'
+    + sorted.map(function(t) {
+        return '<tr>'
+          + '<td class="td-id" style="font-size:11px;">' + o_esc(t.tripId) + '</td>'
+          + '<td style="color:var(--text3);">' + o_esc((t.startDate || '—').substring(0, 10)) + '</td>'
+          + '<td style="color:var(--text3);">' + o_esc((t.endDate   || '—').substring(0, 10)) + '</td>'
+          + '<td style="font-weight:600;">' + o_esc(t.reqName || '—') + '</td>'
+          + '<td>' + o_esc(t.fromLoc || '') + ' → ' + o_esc(t.toLoc || '') + '</td>'
+          + '<td style="font-weight:700;color:var(--text);">' + o_esc(rpt_getBrandFromTrip(t)) + '</td>'
+          + '<td>' + o_esc(t.driverName || '—') + '</td>'
+          + '<td>' + o_statusBadge(t.status) + '</td>'
+          + '<td class="mono" style="color:var(--accent);">'
+          + (t.distance > 0 ? t.distance + ' km' : '<span style="color:var(--text3);">—</span>')
+          + '</td>'
+          + '</tr>';
+      }).join('')
+    + '</tbody></table></div>';
+}
+
+function rpt_getBrandFromTrip(t) {
+  for (var i = 0; i < rpt_rawVehicles.length; i++) {
+    var v = rpt_rawVehicles[i];
+    if (v.vehicleId === t.vehicleId || v.plate === t.plate) {
+      return (v.brand || v.plate || '').toUpperCase();
+    }
+  }
+  return (t.plate || '—').toUpperCase();
 }
 </script>
