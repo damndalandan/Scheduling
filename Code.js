@@ -766,48 +766,97 @@ function getDriverDashboardData() {
 //  DRIVER COMPLETE TRIP
 // ============================================================
 function ops_driverCompleteTrip(payload) {
+  // Validate before acquiring lock
+  if (!payload.tripId)      return { success: false, message: 'Trip ID required.' };
+  if (!payload.actualStart) return { success: false, message: 'Actual Start required.' };
+  if (!payload.actualEnd)   return { success: false, message: 'Actual End required.' };
+
+  var startKm = parseFloat(payload.startKm) || 0;
+  var endKm   = parseFloat(payload.endKm)   || 0;
+  if (isNaN(startKm) || isNaN(endKm))
+    return { success: false, message: 'Mileage must be a number.' };
+  if (endKm < startKm)
+    return { success: false, message: 'End mileage cannot be less than start mileage.' };
+
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch(e) {
+    return { success: false, message: 'Server busy. Please try again in a moment.' };
+  }
+
   try {
     var user = ops_getUserInfo_();
     var role = (user.role || '').toLowerCase();
-    if (!ops_isEncoder_(user.role) && role !== 'driver') {
-      return { success: false, message: 'Access denied. Driver or Encoder role required.' };
-    }
 
-    if (!payload.tripId)      return { success: false, message: 'Trip ID required.' };
-    if (!payload.actualStart) return { success: false, message: 'Actual Start required.' };
-    if (!payload.actualEnd)   return { success: false, message: 'Actual End required.' };
-
-    var startKm = parseFloat(payload.startKm) || 0;
-    var endKm   = parseFloat(payload.endKm)   || 0;
-    if (endKm < startKm) return { success: false, message: 'End mileage cannot be less than start mileage.' };
+    // Drivers only — encoders/admins must use ops_completeTrip()
+    if (role !== 'driver')
+      return { success: false, message: 'Driver access required. Ops staff should use the Trip Completion tab.' };
 
     var row = ops_getTripRow_(payload.tripId);
     if (!row) return { success: false, message: 'Trip not found.' };
-    if (row.data[TRIP_COL.STATUS] !== TRIP_STATUS.APPROVED) {
-      return { success: false, message: 'Trip must be Approved before completing.' };
+
+    var currentStatus = row.data[TRIP_COL.STATUS];
+    if (currentStatus === TRIP_STATUS.COMPLETED)
+      return { success: false, message: 'Trip ' + payload.tripId + ' is already completed.' };
+    if (currentStatus !== TRIP_STATUS.APPROVED)
+      return { success: false, message: 'Trip must be Approved before completing. Current status: ' + currentStatus };
+
+    // Verify this trip actually belongs to this driver
+    var tripDriverEmpId = String(row.data[TRIP_COL.DRIVER_EMP_ID] || '').trim();
+    var tripDriverName  = String(row.data[TRIP_COL.DRIVER_NAME]   || '').trim().toLowerCase();
+
+    // Get the driverId for this logged-in driver from LoginUsers
+    var ss         = SpreadsheetApp.getActiveSpreadsheet();
+    var loginSh    = ss.getSheetByName('LoginUsers');
+    var myDriverId = '';
+    if (loginSh && loginSh.getLastRow() >= 2) {
+      var loginData = loginSh.getRange(2, 1, loginSh.getLastRow() - 1, 4).getValues();
+      for (var i = 0; i < loginData.length; i++) {
+        if (String(loginData[i][0] || '').trim().toLowerCase() === user.email) {
+          myDriverId = String(loginData[i][3] || '').trim();
+          break;
+        }
+      }
     }
 
+    // Block if trip is assigned to a different driver
+    var ownsTrip = (myDriverId && tripDriverEmpId === myDriverId)
+                || (!myDriverId && tripDriverName === user.email.split('@')[0].toLowerCase());
+    if (!ownsTrip)
+      return { success: false, message: 'Access denied. This trip is not assigned to you.' };
+
     var distance = endKm - startKm;
-    var sh  = ops_sh_(OPS_SHEETS.TRIPS);
-    var now = new Date();
+    var sh       = ops_sh_(OPS_SHEETS.TRIPS);
+    var now      = new Date();
 
     sh.getRange(row.idx, TRIP_COL.STATUS       + 1).setValue(TRIP_STATUS.COMPLETED);
-    sh.getRange(row.idx, TRIP_COL.ACTUAL_START  + 1).setValue(payload.actualStart);
-    sh.getRange(row.idx, TRIP_COL.ACTUAL_END    + 1).setValue(payload.actualEnd);
-    sh.getRange(row.idx, TRIP_COL.START_KM      + 1).setValue(startKm);
-    sh.getRange(row.idx, TRIP_COL.END_KM        + 1).setValue(endKm);
-    sh.getRange(row.idx, TRIP_COL.DISTANCE      + 1).setValue(distance);
-    sh.getRange(row.idx, TRIP_COL.REMARKS       + 1).setValue(payload.remarks || '');
-    sh.getRange(row.idx, TRIP_COL.UPDATED_AT    + 1).setValue(now);
-    sh.getRange(row.idx, TRIP_COL.UPDATED_BY    + 1).setValue(user.email);
+    sh.getRange(row.idx, TRIP_COL.ACTUAL_START + 1).setValue(payload.actualStart);
+    sh.getRange(row.idx, TRIP_COL.ACTUAL_END   + 1).setValue(payload.actualEnd);
+    sh.getRange(row.idx, TRIP_COL.START_KM     + 1).setValue(startKm);
+    sh.getRange(row.idx, TRIP_COL.END_KM       + 1).setValue(endKm);
+    sh.getRange(row.idx, TRIP_COL.DISTANCE     + 1).setValue(distance);
+    sh.getRange(row.idx, TRIP_COL.REMARKS      + 1).setValue(payload.remarks || '');
+    sh.getRange(row.idx, TRIP_COL.UPDATED_AT   + 1).setValue(now);
+    sh.getRange(row.idx, TRIP_COL.UPDATED_BY   + 1).setValue(user.email);
 
-    ops_audit_('DRIVER_COMPLETE_TRIP', { tripId: payload.tripId, distance: distance, by: user.email });
+    SpreadsheetApp.flush();
+    ops_audit_('DRIVER_COMPLETE_TRIP', {
+      tripId   : payload.tripId,
+      distance : distance,
+      by       : user.email,
+      driverId : myDriverId,
+      via      : 'driver'
+    });
     return {
       success : true,
       message : 'Trip ' + payload.tripId + ' completed! Distance: ' + distance + ' km.'
     };
+
   } catch(e) {
     return { success: false, message: e.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 
@@ -1140,27 +1189,44 @@ function ops_cancelTrip(tripId, reason) {
 }
 
 function ops_completeTrip(payload) {
+  // Validate before acquiring lock
+  if (!payload.tripId)      return { success: false, message: 'Trip ID required.' };
+  if (!payload.actualStart) return { success: false, message: 'Actual Start required.' };
+  if (!payload.actualEnd)   return { success: false, message: 'Actual End required.' };
+
+  var startKm = parseFloat(payload.startKm) || 0;
+  var endKm   = parseFloat(payload.endKm)   || 0;
+  if (isNaN(startKm) || isNaN(endKm))
+    return { success: false, message: 'Mileage must be a number.' };
+  if (endKm < startKm)
+    return { success: false, message: 'End mileage cannot be less than start mileage.' };
+
+  var lock = LockService.getScriptLock();
   try {
-    const user = ops_getUserInfo_();
+    lock.waitLock(10000);
+  } catch(e) {
+    return { success: false, message: 'Server busy. Please try again in a moment.' };
+  }
+
+  try {
+    var user = ops_getUserInfo_();
+
+    // Encoders and admins only — drivers must use ops_driverCompleteTrip()
     if (!ops_isEncoder_(user.role))
       return { success: false, message: 'Encoder access required.' };
-    if (!payload.tripId)      return { success: false, message: 'Trip ID required.' };
-    if (!payload.actualStart) return { success: false, message: 'Actual Start required.' };
-    if (!payload.actualEnd)   return { success: false, message: 'Actual End required.' };
 
-    const startKm = parseFloat(payload.startKm) || 0;
-    const endKm   = parseFloat(payload.endKm)   || 0;
-    if (isNaN(startKm) || isNaN(endKm)) return { success: false, message: 'Mileage must be a number.' };
-    if (endKm < startKm) return { success: false, message: 'End mileage cannot be less than start mileage.' };
-
-    const row = ops_getTripRow_(payload.tripId);
+    var row = ops_getTripRow_(payload.tripId);
     if (!row) return { success: false, message: 'Trip not found.' };
-    if (row.data[TRIP_COL.STATUS] !== TRIP_STATUS.APPROVED)
-      return { success: false, message: 'Trip must be Approved before completing.' };
 
-    const distance = endKm - startKm;
-    const sh  = ops_sh_(OPS_SHEETS.TRIPS);
-    const now = new Date();
+    var currentStatus = row.data[TRIP_COL.STATUS];
+    if (currentStatus === TRIP_STATUS.COMPLETED)
+      return { success: false, message: 'Trip ' + payload.tripId + ' is already completed.' };
+    if (currentStatus !== TRIP_STATUS.APPROVED)
+      return { success: false, message: 'Trip must be Approved before completing. Current status: ' + currentStatus };
+
+    var distance = endKm - startKm;
+    var sh       = ops_sh_(OPS_SHEETS.TRIPS);
+    var now      = new Date();
 
     sh.getRange(row.idx, TRIP_COL.STATUS       + 1).setValue(TRIP_STATUS.COMPLETED);
     sh.getRange(row.idx, TRIP_COL.ACTUAL_START + 1).setValue(payload.actualStart);
@@ -1173,9 +1239,23 @@ function ops_completeTrip(payload) {
     sh.getRange(row.idx, TRIP_COL.UPDATED_AT   + 1).setValue(now);
     sh.getRange(row.idx, TRIP_COL.UPDATED_BY   + 1).setValue(user.email);
 
-    ops_audit_('OPS_COMPLETE_TRIP', { tripId: payload.tripId, distance, by: user.email });
-    return { success: true, message: 'Trip ' + payload.tripId + ' marked Completed. Distance: ' + distance + ' km.' };
-  } catch(e) { return { success: false, message: e.message }; }
+    SpreadsheetApp.flush();
+    ops_audit_('OPS_COMPLETE_TRIP', {
+      tripId   : payload.tripId,
+      distance : distance,
+      by       : user.email,
+      via      : 'ops'
+    });
+    return {
+      success : true,
+      message : 'Trip ' + payload.tripId + ' marked Completed. Distance: ' + distance + ' km.'
+    };
+
+  } catch(e) {
+    return { success: false, message: e.message };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function ops_getTripRow_(tripId) {
