@@ -43,11 +43,11 @@
   <!-- Period Filter -->
   <div style="display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap;align-items:center;">
     <span style="font-size:12px;font-weight:700;color:var(--text3);margin-right:4px;">Period:</span>
-    <button class="rpt-period-btn active" onclick="rpt_setPeriod('today',this)">Today</button>
+    <button class="rpt-period-btn" onclick="rpt_setPeriod('today',this)">Today</button>
     <button class="rpt-period-btn" onclick="rpt_setPeriod('week',this)">This Week</button>
     <button class="rpt-period-btn" onclick="rpt_setPeriod('month',this)">This Month</button>
     <button class="rpt-period-btn" onclick="rpt_setPeriod('year',this)">This Year</button>
-    <button class="rpt-period-btn" onclick="rpt_setPeriod('all',this)">All Time</button>
+    <button class="rpt-period-btn active" onclick="rpt_setPeriod('all',this)">All Time</button>
     <span id="rpt-period-label" style="font-size:12px;color:var(--text3);margin-left:6px;font-weight:600;"></span>
   </div>
 
@@ -109,7 +109,7 @@
 
 <script>
 var rpt_data   = null;
-var rpt_period = 'today';
+var rpt_period = 'all';
 var rpt_allTrips    = [];
 var rpt_allVehicles = [];
 
@@ -166,13 +166,24 @@ function rpt_fmt(d) {
   return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()] + ' ' + d.getDate();
 }
 
+function rpt_parseDate(str) {
+  if (!str) return null;
+  var s = String(str).trim();
+  if (!s || s === '—') return null;
+  // Try direct parse first (handles ISO and most formats)
+  var d = new Date(s);
+  if (!isNaN(d.getTime())) return d;
+  return null;
+}
+
 function rpt_filterTrips(period) {
   var range = rpt_getDateRange(period);
   if (!range.from) return rpt_allTrips;
   return rpt_allTrips.filter(function(t) {
-    var ds = (t.requestDate || t.startDate || '').substring(0, 10);
-    if (!ds) return false;
-    var d = new Date(ds);
+    // Try requestDate first, then startDate, then actualStart
+    var raw = t.requestDate || t.startDate || t.actualStart || '';
+    var d = rpt_parseDate(raw);
+    if (!d) return false;
     return d >= range.from;
   });
 }
