@@ -699,9 +699,15 @@ function getReportsInitData() {
     const user     = ops_getUserInfo_();
     const trips    = ops_getAllTrips_();
     const vehicles = ops_getAllVehicles_();
-    const report   = ops_buildReports_(trips, vehicles);
-    return { success: true, user, report };
-  } catch(e) { return { success: false, message: e.message }; }
+    return {
+      success     : true,
+      user        : user,
+      allTrips    : trips,
+      allVehicles : vehicles
+    };
+  } catch(e) {
+    return { success: false, message: e.message };
+  }
 }
 
 // ============================================================
