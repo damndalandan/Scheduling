@@ -140,8 +140,8 @@ function ops_bootstrap() {
     },
     {
       name: 'Drivers',
-       headers: ['Driver_ID','Full_Name','Employee_ID','License_ID',
-            'License_Expiry','Contact_Number','Status','Notes']
+      headers: ['Driver_ID','Full_Name','Employee_ID','License_ID',
+                'License_Expiry','Contact_Number','Status','Notes']
     },
   ];
 
@@ -184,11 +184,7 @@ function ops_fmtDate_(val) {
   try {
     var s = String(val).trim();
     if (!s || s === '0' || s === '') return '';
-
-    // Already YYYY-MM-DD string — return as-is (from HTML date input)
     if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-
-    // GAS Date object — use local getters to avoid UTC shift
     var d = (val instanceof Date) ? val : new Date(s);
     if (isNaN(d.getTime())) return '';
     var year = d.getFullYear();
@@ -215,7 +211,6 @@ function ops_fmtDT_(val) {
 function ops_daysLeft_(dateStr) {
   if (!dateStr || dateStr === '') return null;
   try {
-    // dateStr is YYYY-MM-DD from ops_fmtDate_
     var parts = String(dateStr).split('-');
     if (parts.length !== 3) return null;
     var expiry = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
@@ -283,9 +278,9 @@ function ops_isAdmin_(r)    { return r.toLowerCase().includes('admin'); }
 function ops_isApprover_(r) { return r.toLowerCase().includes('approver') || ops_isAdmin_(r); }
 function ops_isEncoder_(r)  { return r.toLowerCase().includes('encoder') || r.toLowerCase().includes('operator') || ops_isAdmin_(r); }
 
-
-
-// LOGIN — verifies email + password against LoginUsers sheet
+// ============================================================
+//  LOGIN
+// ============================================================
 function ops_loginUser(email, password) {
   try {
     var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('LoginUsers');
@@ -294,7 +289,6 @@ function ops_loginUser(email, password) {
     var lr = sh.getLastRow();
     if (lr < 2) return { success: false, message: 'No users registered yet.' };
 
-    // Read columns: A = Email, B = Password, C = Role
     var data = sh.getRange(2, 1, lr - 1, 3).getValues();
 
     var inputEmail = String(email || '').trim().toLowerCase();
@@ -324,7 +318,6 @@ function ops_loginUser(email, password) {
     return { success: false, message: 'Login error: ' + e.message };
   }
 }
-
 
 // ============================================================
 //  AUDIT LOG
@@ -356,10 +349,7 @@ function ops_getSettings_() {
 }
 
 // ============================================================
-//  JO DATABASE — fetch from external linked spreadsheet
-// ============================================================
-// ============================================================
-//  DATABASE LINK HELPER — extracts Spreadsheet ID from DatabaseLink sheet
+//  DATABASE LINK HELPER
 // ============================================================
 function ops_getDBId_(label) {
   const ss        = SpreadsheetApp.getActiveSpreadsheet();
@@ -378,9 +368,11 @@ function ops_getDBId_(label) {
   return match[1];
 }
 
+// ============================================================
+//  JO LIST
+// ============================================================
 function ops_getJOList() {
   try {
-    // 1. Get JODatabase spreadsheet ID from DatabaseLink sheet
     let joDbId;
     try {
       joDbId = ops_getDBId_('JODatabase');
@@ -388,7 +380,6 @@ function ops_getJOList() {
       return { success: false, message: 'DatabaseLink error: ' + e.message };
     }
 
-    // 2. Open external spreadsheet by ID — more reliable than openByUrl
     let extSS;
     try {
       extSS = SpreadsheetApp.openById(joDbId);
@@ -396,23 +387,20 @@ function ops_getJOList() {
       return { success: false, message: 'Cannot open JODatabase (ID: ' + joDbId + '). Check sharing permissions: ' + e.message };
     }
 
-    // 3. Get Line-up JOs sheet
     const joSh = extSS.getSheetByName('Line-up JOs');
     if (!joSh) {
       const shNames = extSS.getSheets().map(function(s) { return s.getName(); });
       return { success: false, message: '"Line-up JOs" not found. Available sheets: ' + shNames.join(', ') };
     }
 
-    // 4. Read Column I (index 8) = Job Description, Column L (index 11) = JO Number
     const lr = joSh.getLastRow();
     if (lr < 2) return { success: true, data: [] };
 
-    const data = joSh.getRange(2, 1, lr - 1, 12).getValues(); // cols A–L
-
+    const data = joSh.getRange(2, 1, lr - 1, 12).getValues();
     const list = [];
     data.forEach(function(r) {
-      const joNumber = String(r[11] || '').trim(); // Column L
-      const jobDesc  = String(r[8]  || '').trim(); // Column I
+      const joNumber = String(r[11] || '').trim();
+      const jobDesc  = String(r[8]  || '').trim();
       if (joNumber) list.push({ joNumber: joNumber, jobDesc: jobDesc });
     });
 
@@ -422,6 +410,9 @@ function ops_getJOList() {
   }
 }
 
+// ============================================================
+//  EMPLOYEE LISTS
+// ============================================================
 function ops_getEmployeeList() {
   try {
     var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('EmployeName');
@@ -431,9 +422,9 @@ function ops_getEmployeeList() {
     var data = sh.getRange(2, 1, lr - 1, 3).getValues();
     var list = [];
     data.forEach(function(r) {
-      var empId   = String(r[0] || '').trim(); // Column A: Employee Code
-      var team    = String(r[1] || '').trim(); // Column B: Team
-      var empName = String(r[2] || '').trim(); // Column C: Name of Employee
+      var empId   = String(r[0] || '').trim();
+      var team    = String(r[1] || '').trim();
+      var empName = String(r[2] || '').trim();
       if (empName) list.push({ empId: empId, empName: empName, team: team });
     });
     return { success: true, data: list };
@@ -442,12 +433,32 @@ function ops_getEmployeeList() {
   }
 }
 
+function ops_getEmployeeList_() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sh = ss.getSheetByName('EmployeName');
+    if (!sh) return [];
+    const lr = sh.getLastRow();
+    if (lr < 2) return [];
+    return sh.getRange(2, 1, lr - 1, 3).getValues()
+      .filter(function(r) { return r[2] && String(r[2]).trim(); })
+      .map(function(r) {
+        return {
+          empCode : String(r[0] || '').trim(),
+          team    : String(r[1] || '').trim(),
+          name    : String(r[2] || '').trim()
+        };
+      });
+  } catch(e) {
+    Logger.log('ops_getEmployeeList_ error: ' + e.message);
+    return [];
+  }
+}
 
 // ============================================================
-//  COMBINED INIT DATA (one call per tab)
+//  COMBINED INIT DATA
 // ============================================================
 
-// Dashboard init — stats + recent trips + renewal alerts
 function getDashboardInitData() {
   try {
     const user     = ops_getUserInfo_();
@@ -471,27 +482,87 @@ function getDashboardInitData() {
   } catch(e) { return { success: false, message: e.message }; }
 }
 
-// Trips tab init — trips + vehicles (for dropdown)
 function getTripsInitData() {
   try {
-    var user      = ops_getUserInfo_();
-    var trips     = ops_getAllTrips_();
-    var vehicles  = ops_getAllVehicles_();
-    var joResult  = ops_getJOList();
-    var empResult = ops_getEmployeeList();
-    var joList    = joResult.success  ? joResult.data  : [];
-    var joError   = joResult.success  ? null            : joResult.message;
-    var empList   = empResult.success ? empResult.data : [];
-    return { success: true, user: user, trips: trips, vehicles: vehicles, joList: joList, joError: joError, empList: empList };
+    const user      = ops_getUserInfo_();
+    const trips     = ops_getAllTrips_();
+    const vehicles  = ops_getAllVehicles_();
+    const drivers   = ops_getAllDrivers_();
+    const employees = ops_getEmployeeList_();
+    const joResult  = ops_getJOList();
+    const joList    = joResult.success ? joResult.data : [];
+    const joError   = joResult.success ? null : joResult.message;
+    const tripTypes = ops_getTripTypes_().map(function(r) { return { value: r.value }; });
+    return { success: true, user, trips, vehicles, drivers, employees, joList, joError, tripTypes };
+  } catch(e) { return { success: false, message: e.message }; }
+}
+
+function getVehiclesInitData() {
+  try {
+    const user     = ops_getUserInfo_();
+    const vehicles = ops_getAllVehicles_();
+    return { success: true, user, vehicles };
+  } catch(e) { return { success: false, message: e.message }; }
+}
+
+function getApprovalInitData() {
+  try {
+    const user  = ops_getUserInfo_();
+    const trips = ops_getAllTrips_().filter(function(t) {
+      return t.status === TRIP_STATUS.SUBMITTED;
+    });
+    return { success: true, user, trips };
+  } catch(e) { return { success: false, message: e.message }; }
+}
+
+function getCompletionInitData() {
+  try {
+    const user  = ops_getUserInfo_();
+    const trips = ops_getAllTrips_().filter(function(t) {
+      return t.status === TRIP_STATUS.APPROVED;
+    });
+    return { success: true, user, trips };
+  } catch(e) { return { success: false, message: e.message }; }
+}
+
+function getRenewalsInitData() {
+  try {
+    const user     = ops_getUserInfo_();
+    const vehicles = ops_getAllVehicles_();
+    const settings = ops_getSettings_();
+    const alertDays= parseInt(settings.renewal_alert_days) || 30;
+    const alerts   = ops_buildRenewalAlerts_(vehicles, alertDays);
+    return { success: true, user, alerts };
+  } catch(e) { return { success: false, message: e.message }; }
+}
+
+function getReportsInitData() {
+  try {
+    const user     = ops_getUserInfo_();
+    const trips    = ops_getAllTrips_();
+    const vehicles = ops_getAllVehicles_();
+    const report   = ops_buildReports_(trips, vehicles);
+    return {
+      success     : true,
+      user,
+      report,
+      rawTrips    : trips,
+      rawVehicles : vehicles
+    };
+  } catch(e) { return { success: false, message: e.message }; }
+}
+
+function getDriversInitData() {
+  try {
+    const user    = ops_getUserInfo_();
+    const drivers = ops_getAllDrivers_();
+    return { success: true, user, drivers };
   } catch(e) { return { success: false, message: e.message }; }
 }
 
 // ============================================================
-//  DRIVER DASHBOARD — I-PASTE SA Code.js
-//  (i-add after getTripsInitData function)
+//  DRIVER DASHBOARD — FIXED VERSION
 // ============================================================
-
-// Returns trips assigned to the logged-in driver
 function getDriverDashboardData() {
   try {
     var user     = ops_getUserInfo_();
@@ -501,12 +572,19 @@ function getDriverDashboardData() {
     var driverName = '';
     var myTrips    = [];
 
+    // Helper: normalize string for comparison
+    function normalize(s) {
+      return String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    }
+
+    // ══════════════════════════════════════════════════════
+    //  STEP 1: Find driver name from LoginUsers → Drivers
+    // ══════════════════════════════════════════════════════
     try {
       var ss       = SpreadsheetApp.getActiveSpreadsheet();
       var loginSh  = ss.getSheetByName('LoginUsers');
       var driverSh = ss.getSheetByName('Drivers');
 
-      // ✅ STEP 1: Find driver name from LoginUsers → Drivers sheet by index
       if (loginSh && driverSh
           && loginSh.getLastRow() >= 2
           && driverSh.getLastRow() >= 2) {
@@ -514,79 +592,119 @@ function getDriverDashboardData() {
         var loginData  = loginSh.getRange(2, 1, loginSh.getLastRow() - 1, 3).getValues();
         var driverData = driverSh.getRange(2, 1, driverSh.getLastRow() - 1, 8).getValues();
 
-        // Collect driver-role logins in order
-        var driverLogins = [];
+        // Collect ONLY driver-role logins in order (must match Drivers sheet row order)
+        var driverOnlyLogins = [];
         for (var i = 0; i < loginData.length; i++) {
-          if (String(loginData[i][2] || '').trim().toLowerCase() === 'driver') {
-            driverLogins.push(String(loginData[i][0] || '').trim().toLowerCase());
+          var rowRole = String(loginData[i][2] || '').trim().toLowerCase();
+          if (rowRole === 'driver') {
+            driverOnlyLogins.push(String(loginData[i][0] || '').trim().toLowerCase());
           }
         }
 
-        // Find index of this email among driver logins
-        var myIndex = driverLogins.indexOf(email);
+        // Find this email's position among driver-only logins
+        var driverLoginIndex = driverOnlyLogins.indexOf(email);
+
+        Logger.log('=== DRIVER LOOKUP ===');
+        Logger.log('Email: [' + email + ']');
+        Logger.log('Driver-only logins: ' + JSON.stringify(driverOnlyLogins));
+        Logger.log('Login index: ' + driverLoginIndex);
+        Logger.log('Driver records count: ' + driverData.length);
 
         // Get name from Drivers sheet using same index
-        if (myIndex >= 0 && driverData[myIndex]) {
-          driverName = String(driverData[myIndex][1] || '').trim();
+        if (driverLoginIndex >= 0 && driverLoginIndex < driverData.length) {
+          driverName = String(driverData[driverLoginIndex][1] || '').trim();
+          Logger.log('Found by index — driverName: [' + driverName + ']');
+        }
+
+        // FIX: If index lookup failed, try matching by email username vs driver name
+        if (!driverName) {
+          var emailUser = email.split('@')[0].toLowerCase().replace(/[._\-]/g, ' ').trim();
+          Logger.log('Index failed. Trying email-username match: [' + emailUser + ']');
+
+          for (var k = 0; k < driverData.length; k++) {
+            var dn = normalize(String(driverData[k][1] || ''));
+            if (!dn) continue;
+            var dnWords = dn.split(' ').filter(function(w) { return w.length >= 3; });
+            var euWords = emailUser.split(' ').filter(function(w) { return w.length >= 3; });
+            var matched = dnWords.some(function(w) { return emailUser.indexOf(w) > -1; })
+                       || euWords.some(function(w) { return dn.indexOf(w) > -1; });
+            if (matched) {
+              driverName = String(driverData[k][1] || '').trim();
+              Logger.log('Found by email-username — driverName: [' + driverName + ']');
+              break;
+            }
+          }
         }
       }
-
-      Logger.log('=== DRIVER LOOKUP ===');
-      Logger.log('Email: [' + email + ']');
-      Logger.log('Resolved driverName: [' + driverName + ']');
-
-      // ✅ STEP 2: Match trips — try ALL strategies
-      if (driverName) {
-        var n = driverName.toLowerCase().replace(/\s+/g, ' ').trim();
-
-        myTrips = allTrips.filter(function(t) {
-          // ✅ Normalize spaces in trip driver name too
-          var td = (t.driverName || '').toLowerCase().replace(/\s+/g, ' ').trim();
-
-          // Exact match
-          if (td === n) return true;
-
-          // Contains full name
-          if (td.indexOf(n) > -1 || n.indexOf(td) > -1) return true;
-
-          // First name match (min 3 chars)
-          var fn1 = n.split(' ')[0];
-          var fn2 = td.split(' ')[0];
-          if (fn1.length >= 3 && fn2.length >= 3 && fn1 === fn2) return true;
-
-          return false;
-        });
-      }
-
-      // ✅ STEP 3: Fallback — match by driverEmpId = email
-      if (myTrips.length === 0) {
-        myTrips = allTrips.filter(function(t) {
-          return (t.driverEmpId || '').trim().toLowerCase() === email;
-        });
-      }
-
-      // ✅ STEP 4: Last resort — show all Approved/Submitted trips
-      // where driver name partially matches email username
-      if (myTrips.length === 0) {
-        var emailUser = email.split('@')[0].toLowerCase(); // e.g. "simon"
-        myTrips = allTrips.filter(function(t) {
-          var td = (t.driverName || '').toLowerCase();
-          return td.indexOf(emailUser) > -1;
-        });
-        if (myTrips.length > 0) {
-          Logger.log('Matched via email username fallback: ' + emailUser);
-        }
-      }
-
-      var allDriverNames = allTrips.map(function(t) {
-        return '[' + (t.driverName || '') + ']';
-      }).join(', ');
-      Logger.log('All driverNames in Trips: ' + allDriverNames);
-      Logger.log('Matched trips: ' + myTrips.length);
-
     } catch(e) {
-      Logger.log('Driver lookup error: ' + e.message);
+      Logger.log('Driver name lookup error: ' + e.message);
     }
+
+    Logger.log('=== FINAL driverName: [' + driverName + '] ===');
+
+    // ══════════════════════════════════════════════════════
+    //  STEP 2: Match trips using multiple strategies
+    // ══════════════════════════════════════════════════════
+    if (driverName) {
+      var n = normalize(driverName);
+
+      myTrips = allTrips.filter(function(t) {
+        var td = normalize(t.driverName);
+        if (!td) return false;
+
+        // 1. Exact match
+        if (td === n) return true;
+
+        // 2. One contains the other (handles partial names)
+        if (td.indexOf(n) > -1 || n.indexOf(td) > -1) return true;
+
+        // 3. First name matches
+        var nParts  = n.split(' ').filter(function(w) { return w.length >= 2; });
+        var tdParts = td.split(' ').filter(function(w) { return w.length >= 2; });
+        if (nParts.length > 0 && tdParts.length > 0 && nParts[0] === tdParts[0]) return true;
+
+        // 4. Last name matches
+        if (nParts.length > 1 && tdParts.length > 1) {
+          var nLast  = nParts[nParts.length - 1];
+          var tdLast = tdParts[tdParts.length - 1];
+          if (nLast === tdLast && nLast.length >= 3) return true;
+        }
+
+        // 5. Two or more words match
+        var matchCount = nParts.filter(function(w) {
+          return w.length >= 3 && tdParts.indexOf(w) > -1;
+        }).length;
+        if (matchCount >= 2) return true;
+
+        return false;
+      });
+
+      Logger.log('Matched by driverName: ' + myTrips.length + ' trips');
+    }
+
+    // Fallback 1: driverEmpId matches email
+    if (myTrips.length === 0) {
+      myTrips = allTrips.filter(function(t) {
+        return normalize(t.driverEmpId) === email;
+      });
+      if (myTrips.length > 0) Logger.log('Matched by driverEmpId: ' + myTrips.length);
+    }
+
+    // Fallback 2: email username vs driverName in trips
+    if (myTrips.length === 0) {
+      var emailUser2 = email.split('@')[0].toLowerCase().replace(/[._\-]/g, ' ');
+      var euParts2   = emailUser2.split(' ').filter(function(w) { return w.length >= 3; });
+      myTrips = allTrips.filter(function(t) {
+        var td = normalize(t.driverName);
+        if (!td) return false;
+        return euParts2.some(function(w) { return td.indexOf(w) > -1; });
+      });
+      if (myTrips.length > 0) Logger.log('Matched by email-username fallback: ' + myTrips.length);
+    }
+
+    Logger.log('All driverNames in Trips: '
+      + allTrips.map(function(t) { return '[' + (t.driverName || '') + ']'; }).join(', '));
+    Logger.log('Total matched: ' + myTrips.length);
 
     return {
       success    : true,
@@ -601,12 +719,12 @@ function getDriverDashboardData() {
   }
 }
 
-// Driver completes a trip — same as ops_completeTrip but allows driver role
+// ============================================================
+//  DRIVER COMPLETE TRIP
+// ============================================================
 function ops_driverCompleteTrip(payload) {
   try {
     var user = ops_getUserInfo_();
-
-    // Allow driver role in addition to encoder/admin
     var role = (user.role || '').toLowerCase();
     if (!ops_isEncoder_(user.role) && role !== 'driver') {
       return { success: false, message: 'Access denied. Driver or Encoder role required.' };
@@ -642,75 +760,12 @@ function ops_driverCompleteTrip(payload) {
 
     ops_audit_('DRIVER_COMPLETE_TRIP', { tripId: payload.tripId, distance: distance, by: user.email });
     return {
-      success  : true,
-      message  : 'Trip ' + payload.tripId + ' completed! Distance: ' + distance + ' km.'
+      success : true,
+      message : 'Trip ' + payload.tripId + ' completed! Distance: ' + distance + ' km.'
     };
   } catch(e) {
     return { success: false, message: e.message };
   }
-}
-
-// Vehicles tab init
-function getVehiclesInitData() {
-  try {
-    const user     = ops_getUserInfo_();
-    const vehicles = ops_getAllVehicles_();
-    return { success: true, user, vehicles };
-  } catch(e) { return { success: false, message: e.message }; }
-}
-
-// Approval tab init — submitted trips only
-function getApprovalInitData() {
-  try {
-    const user  = ops_getUserInfo_();
-    const trips = ops_getAllTrips_().filter(function(t) {
-      return t.status === TRIP_STATUS.SUBMITTED;
-    });
-    return { success: true, user, trips };
-  } catch(e) { return { success: false, message: e.message }; }
-}
-
-// Completion tab init — approved trips only
-function getCompletionInitData() {
-  try {
-    const user  = ops_getUserInfo_();
-    const trips = ops_getAllTrips_().filter(function(t) {
-      return t.status === TRIP_STATUS.APPROVED;
-    });
-    return { success: true, user, trips };
-  } catch(e) { return { success: false, message: e.message }; }
-}
-
-// Renewals tab init
-function getRenewalsInitData() {
-  try {
-    const user     = ops_getUserInfo_();
-    const vehicles = ops_getAllVehicles_();
-    const settings = ops_getSettings_();
-    const alertDays= parseInt(settings.renewal_alert_days) || 30;
-    const alerts   = ops_buildRenewalAlerts_(vehicles, alertDays);
-    return { success: true, user, alerts };
-  } catch(e) { return { success: false, message: e.message }; }
-}
-
-// Reports tab init
-function getReportsInitData() {
-  try {
-    const user     = ops_getUserInfo_();
-    const trips    = ops_getAllTrips_();
-    const vehicles = ops_getAllVehicles_();
-    const report   = ops_buildReports_(trips, vehicles);
- 
-    // ✅ Pass rawTrips + rawVehicles so frontend can filter by period
-    //    and look up brand names from vehicleId/plate
-    return {
-      success     : true,
-      user,
-      report,
-      rawTrips    : trips,      // full trip list for period filtering
-      rawVehicles : vehicles    // vehicle list for brand name lookup
-    };
-  } catch(e) { return { success: false, message: e.message }; }
 }
 
 // ============================================================
@@ -785,10 +840,10 @@ function ops_updateVehicle(payload) {
       return { success: false, message: 'Access denied.' };
     if (!payload.vehicleId) return { success: false, message: 'Vehicle ID required.' };
 
-    const sh  = ops_sh_(OPS_SHEETS.VEHICLES);
-    const lr  = sh.getLastRow();
-    const data= sh.getRange(2, 1, lr - 1, 13).getValues();
-    let rowIdx= -1;
+    const sh   = ops_sh_(OPS_SHEETS.VEHICLES);
+    const lr   = sh.getLastRow();
+    const data = sh.getRange(2, 1, lr - 1, 13).getValues();
+    let rowIdx = -1;
     data.forEach(function(r, i) {
       if (String(r[VEH_COL.VEHICLE_ID]).trim() === payload.vehicleId) rowIdx = i + 2;
     });
@@ -853,33 +908,33 @@ function ops_getAllTrips_() {
         rowIndex     : i + 2,
         tripId       : String(r[TRIP_COL.TRIP_ID]).trim(),
         requestDate  : ops_fmtDT_(r[TRIP_COL.REQUEST_DATE]),
-        reqEmpId     : String(r[TRIP_COL.REQ_EMP_ID]  || '').trim(),
-        reqName      : String(r[TRIP_COL.REQ_NAME]     || '').trim(),
-        tripType     : String(r[TRIP_COL.TRIP_TYPE]    || '').trim(),
-        purpose      : String(r[TRIP_COL.PURPOSE]      || '').trim(),
-        relatedJo    : String(r[TRIP_COL.RELATED_JO]   || '').trim(),
-        fromLoc      : String(r[TRIP_COL.FROM_LOC]     || '').trim(),
-        toLoc        : String(r[TRIP_COL.TO_LOC]       || '').trim(),
+        reqEmpId     : String(r[TRIP_COL.REQ_EMP_ID]   || '').trim(),
+        reqName      : String(r[TRIP_COL.REQ_NAME]      || '').trim(),
+        tripType     : String(r[TRIP_COL.TRIP_TYPE]     || '').trim(),
+        purpose      : String(r[TRIP_COL.PURPOSE]       || '').trim(),
+        relatedJo    : String(r[TRIP_COL.RELATED_JO]    || '').trim(),
+        fromLoc      : String(r[TRIP_COL.FROM_LOC]      || '').trim(),
+        toLoc        : String(r[TRIP_COL.TO_LOC]        || '').trim(),
         startDate    : ops_fmtDT_(r[TRIP_COL.START_DATE]),
         endDate      : ops_fmtDT_(r[TRIP_COL.END_DATE]),
-        vehicleId    : String(r[TRIP_COL.VEHICLE_ID]   || '').trim(),
-        plate        : String(r[TRIP_COL.PLATE]        || '').trim(),
-        driverEmpId  : String(r[TRIP_COL.DRIVER_EMP_ID]|| '').trim(),
-        driverName   : String(r[TRIP_COL.DRIVER_NAME]  || '').trim(),
-        status       : String(r[TRIP_COL.STATUS]       || TRIP_STATUS.DRAFT).trim(),
-        approvedBy   : String(r[TRIP_COL.APPROVED_BY]  || '').trim(),
+        vehicleId    : String(r[TRIP_COL.VEHICLE_ID]    || '').trim(),
+        plate        : String(r[TRIP_COL.PLATE]         || '').trim(),
+        driverEmpId  : String(r[TRIP_COL.DRIVER_EMP_ID] || '').trim(),
+        driverName   : String(r[TRIP_COL.DRIVER_NAME]   || '').trim(),
+        status       : String(r[TRIP_COL.STATUS]        || TRIP_STATUS.DRAFT).trim(),
+        approvedBy   : String(r[TRIP_COL.APPROVED_BY]   || '').trim(),
         approvalDate : ops_fmtDT_(r[TRIP_COL.APPROVAL_DATE]),
-        rejectReason : String(r[TRIP_COL.REJECT_REASON]|| '').trim(),
-        cancelReason : String(r[TRIP_COL.CANCEL_REASON]|| '').trim(),
+        rejectReason : String(r[TRIP_COL.REJECT_REASON] || '').trim(),
+        cancelReason : String(r[TRIP_COL.CANCEL_REASON] || '').trim(),
         actualStart  : ops_fmtDT_(r[TRIP_COL.ACTUAL_START]),
         actualEnd    : ops_fmtDT_(r[TRIP_COL.ACTUAL_END]),
-        startKm      : parseFloat(r[TRIP_COL.START_KM]) || 0,
-        endKm        : parseFloat(r[TRIP_COL.END_KM])   || 0,
-        distance     : parseFloat(r[TRIP_COL.DISTANCE]) || 0,
-        proofLink    : String(r[TRIP_COL.PROOF_LINK]   || '').trim(),
-        remarks      : String(r[TRIP_COL.REMARKS]      || '').trim(),
+        startKm      : parseFloat(r[TRIP_COL.START_KM])  || 0,
+        endKm        : parseFloat(r[TRIP_COL.END_KM])    || 0,
+        distance     : parseFloat(r[TRIP_COL.DISTANCE])  || 0,
+        proofLink    : String(r[TRIP_COL.PROOF_LINK]    || '').trim(),
+        remarks      : String(r[TRIP_COL.REMARKS]       || '').trim(),
         updatedAt    : ops_fmtDT_(r[TRIP_COL.UPDATED_AT]),
-        updatedBy    : String(r[TRIP_COL.UPDATED_BY]   || '').trim()
+        updatedBy    : String(r[TRIP_COL.UPDATED_BY]    || '').trim()
       };
     });
 }
@@ -887,7 +942,6 @@ function ops_getAllTrips_() {
 function ops_saveTrip(payload) {
   try {
     const user = ops_getUserInfo_();
-    // Validate required fields
     if (!payload.reqName)   return { success: false, message: 'Requestor Name required.' };
     if (!payload.tripType)  return { success: false, message: 'Trip Type required.' };
     if (!payload.purpose)   return { success: false, message: 'Purpose required.' };
@@ -896,10 +950,9 @@ function ops_saveTrip(payload) {
     if (!payload.startDate) return { success: false, message: 'Planned Start required.' };
     if (!payload.endDate)   return { success: false, message: 'Planned End required.' };
 
-    // Extra validation if submitting
     if (payload.status === TRIP_STATUS.SUBMITTED) {
-      if (!payload.vehicleId) return { success: false, message: 'Vehicle required to submit.' };
-      if (!payload.driverName)return { success: false, message: 'Driver required to submit.' };
+      if (!payload.vehicleId)  return { success: false, message: 'Vehicle required to submit.' };
+      if (!payload.driverName) return { success: false, message: 'Driver required to submit.' };
     }
 
     const trips = ops_getAllTrips_();
@@ -909,23 +962,23 @@ function ops_saveTrip(payload) {
 
     sh.getRange(sh.getLastRow() + 1, 1, 1, 29).setValues([[
       id, now,
-      payload.reqEmpId   || '',
-      payload.reqName    || '',
-      payload.tripType   || '',
-      payload.purpose    || '',
-      payload.relatedJo  || '',
-      payload.fromLoc    || '',
-      payload.toLoc      || '',
-      payload.startDate  || '',
-      payload.endDate    || '',
-      payload.vehicleId  || '',
-      payload.plate      || '',
-      payload.driverEmpId|| '',
-      payload.driverName || '',
-      payload.status     || TRIP_STATUS.DRAFT,
+      payload.reqEmpId    || '',
+      payload.reqName     || '',
+      payload.tripType    || '',
+      payload.purpose     || '',
+      payload.relatedJo   || '',
+      payload.fromLoc     || '',
+      payload.toLoc       || '',
+      payload.startDate   || '',
+      payload.endDate     || '',
+      payload.vehicleId   || '',
+      payload.plate       || '',
+      payload.driverEmpId || '',
+      payload.driverName  || '',
+      payload.status      || TRIP_STATUS.DRAFT,
       '', '', '', '', '', '', 0, 0, 0,
-      payload.proofLink  || '',
-      payload.remarks    || '',
+      payload.proofLink   || '',
+      payload.remarks     || '',
       now, user.email
     ]]);
 
@@ -947,11 +1000,11 @@ function ops_approveTrip(tripId) {
 
     const sh  = ops_sh_(OPS_SHEETS.TRIPS);
     const now = new Date();
-    sh.getRange(row.idx, TRIP_COL.STATUS       + 1).setValue(TRIP_STATUS.APPROVED);
-    sh.getRange(row.idx, TRIP_COL.APPROVED_BY  + 1).setValue(user.email);
-    sh.getRange(row.idx, TRIP_COL.APPROVAL_DATE+ 1).setValue(now);
-    sh.getRange(row.idx, TRIP_COL.UPDATED_AT   + 1).setValue(now);
-    sh.getRange(row.idx, TRIP_COL.UPDATED_BY   + 1).setValue(user.email);
+    sh.getRange(row.idx, TRIP_COL.STATUS        + 1).setValue(TRIP_STATUS.APPROVED);
+    sh.getRange(row.idx, TRIP_COL.APPROVED_BY   + 1).setValue(user.email);
+    sh.getRange(row.idx, TRIP_COL.APPROVAL_DATE + 1).setValue(now);
+    sh.getRange(row.idx, TRIP_COL.UPDATED_AT    + 1).setValue(now);
+    sh.getRange(row.idx, TRIP_COL.UPDATED_BY    + 1).setValue(user.email);
 
     ops_audit_('OPS_APPROVE_TRIP', { tripId, by: user.email });
     return { success: true, message: 'Trip ' + tripId + ' approved.' };
@@ -1013,9 +1066,9 @@ function ops_completeTrip(payload) {
     const user = ops_getUserInfo_();
     if (!ops_isEncoder_(user.role))
       return { success: false, message: 'Encoder access required.' };
-    if (!payload.tripId)     return { success: false, message: 'Trip ID required.' };
-    if (!payload.actualStart)return { success: false, message: 'Actual Start required.' };
-    if (!payload.actualEnd)  return { success: false, message: 'Actual End required.' };
+    if (!payload.tripId)      return { success: false, message: 'Trip ID required.' };
+    if (!payload.actualStart) return { success: false, message: 'Actual Start required.' };
+    if (!payload.actualEnd)   return { success: false, message: 'Actual End required.' };
 
     const startKm = parseFloat(payload.startKm) || 0;
     const endKm   = parseFloat(payload.endKm)   || 0;
@@ -1031,23 +1084,22 @@ function ops_completeTrip(payload) {
     const sh  = ops_sh_(OPS_SHEETS.TRIPS);
     const now = new Date();
 
-    sh.getRange(row.idx, TRIP_COL.STATUS      + 1).setValue(TRIP_STATUS.COMPLETED);
+    sh.getRange(row.idx, TRIP_COL.STATUS       + 1).setValue(TRIP_STATUS.COMPLETED);
     sh.getRange(row.idx, TRIP_COL.ACTUAL_START + 1).setValue(payload.actualStart);
-    sh.getRange(row.idx, TRIP_COL.ACTUAL_END  + 1).setValue(payload.actualEnd);
-    sh.getRange(row.idx, TRIP_COL.START_KM    + 1).setValue(startKm);
-    sh.getRange(row.idx, TRIP_COL.END_KM      + 1).setValue(endKm);
-    sh.getRange(row.idx, TRIP_COL.DISTANCE    + 1).setValue(distance);
-    sh.getRange(row.idx, TRIP_COL.PROOF_LINK  + 1).setValue(payload.proofLink  || '');
-    sh.getRange(row.idx, TRIP_COL.REMARKS     + 1).setValue(payload.remarks    || '');
-    sh.getRange(row.idx, TRIP_COL.UPDATED_AT  + 1).setValue(now);
-    sh.getRange(row.idx, TRIP_COL.UPDATED_BY  + 1).setValue(user.email);
+    sh.getRange(row.idx, TRIP_COL.ACTUAL_END   + 1).setValue(payload.actualEnd);
+    sh.getRange(row.idx, TRIP_COL.START_KM     + 1).setValue(startKm);
+    sh.getRange(row.idx, TRIP_COL.END_KM       + 1).setValue(endKm);
+    sh.getRange(row.idx, TRIP_COL.DISTANCE     + 1).setValue(distance);
+    sh.getRange(row.idx, TRIP_COL.PROOF_LINK   + 1).setValue(payload.proofLink || '');
+    sh.getRange(row.idx, TRIP_COL.REMARKS      + 1).setValue(payload.remarks   || '');
+    sh.getRange(row.idx, TRIP_COL.UPDATED_AT   + 1).setValue(now);
+    sh.getRange(row.idx, TRIP_COL.UPDATED_BY   + 1).setValue(user.email);
 
     ops_audit_('OPS_COMPLETE_TRIP', { tripId: payload.tripId, distance, by: user.email });
     return { success: true, message: 'Trip ' + payload.tripId + ' marked Completed. Distance: ' + distance + ' km.' };
   } catch(e) { return { success: false, message: e.message }; }
 }
 
-// ── Trip row finder helper ──
 function ops_getTripRow_(tripId) {
   const sh = ops_sh_(OPS_SHEETS.TRIPS);
   const lr = sh.getLastRow();
@@ -1066,7 +1118,6 @@ function ops_getTripRow_(tripId) {
 function ops_buildRenewalAlerts_(vehicles, alertDays) {
   const rows = [];
   vehicles.forEach(function(v) {
-    // Always add Insurance row — even if no expiry date set
     var insDays = v.insExpiry ? ops_daysLeft_(v.insExpiry) : null;
     rows.push({
       vehicleId  : v.vehicleId,
@@ -1080,7 +1131,6 @@ function ops_buildRenewalAlerts_(vehicles, alertDays) {
                  : insDays <= alertDays ? 'Due in ' + insDays + ' days'
                  : 'OK'
     });
-    // Always add LTO row
     var ltoDays = v.ltoExpiry ? ops_daysLeft_(v.ltoExpiry) : null;
     rows.push({
       vehicleId  : v.vehicleId,
@@ -1095,7 +1145,6 @@ function ops_buildRenewalAlerts_(vehicles, alertDays) {
                  : 'OK'
     });
   });
-  // Sort: Expired first, then Due Soon, then OK, then No Date
   rows.sort(function(a, b) {
     var sa = a.daysLeft === null ? 9999 : a.daysLeft;
     var sb = b.daysLeft === null ? 9999 : b.daysLeft;
@@ -1110,7 +1159,6 @@ function ops_buildRenewalAlerts_(vehicles, alertDays) {
 function ops_buildReports_(trips, vehicles) {
   const completed = trips.filter(function(t) { return t.status === TRIP_STATUS.COMPLETED; });
 
-  // By vehicle
   const byVehicle = {};
   completed.forEach(function(t) {
     if (!byVehicle[t.plate]) byVehicle[t.plate] = { count: 0, km: 0 };
@@ -1118,7 +1166,6 @@ function ops_buildReports_(trips, vehicles) {
     byVehicle[t.plate].km += (parseFloat(t.distance) || 0);
   });
 
-  // By driver
   const byDriver = {};
   completed.forEach(function(t) {
     const key = t.driverName || 'Unknown';
@@ -1127,13 +1174,11 @@ function ops_buildReports_(trips, vehicles) {
     byDriver[key].km += (parseFloat(t.distance) || 0);
   });
 
-  // By type — all trips
   const byType = {};
   trips.forEach(function(t) {
     byType[t.tripType] = (byType[t.tripType] || 0) + 1;
   });
 
-  // Mileage summary
   const mileageSummary = vehicles.map(function(v) {
     const recorded = (byVehicle[v.plate] || {}).km || 0;
     return { plate: v.plate, brand: v.brand, begMileage: v.begMileage, recordedKm: recorded };
@@ -1144,9 +1189,7 @@ function ops_buildReports_(trips, vehicles) {
 
 // ============================================================
 //  DRIVERS — CRUD
-//  I-paste kini sa PINAKA-UBOS sa Code.js
 // ============================================================
-
 const DRIVER_COL = {
   DRIVER_ID      : 0,
   NAME           : 1,
@@ -1163,7 +1206,6 @@ function ops_getAllDrivers_() {
   const lr = sh.getLastRow();
   if (lr < 2) return [];
 
-  // ✅ Load login emails from LoginUsers (role = driver)
   var loginMap = {};
   try {
     var loginSh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('LoginUsers');
@@ -1180,7 +1222,6 @@ function ops_getAllDrivers_() {
     .filter(function(r) { return r[DRIVER_COL.DRIVER_ID] && String(r[DRIVER_COL.DRIVER_ID]).trim(); })
     .map(function(r) {
       var driverName = String(r[DRIVER_COL.NAME] || '').trim().toLowerCase();
-      // Match login email by name (first word match)
       var loginEmail = '';
       Object.keys(loginMap).forEach(function(em) {
         if (em.indexOf(driverName.split(' ')[0]) > -1 || driverName.indexOf(em.split('@')[0]) > -1) {
@@ -1199,13 +1240,6 @@ function ops_getAllDrivers_() {
         loginEmail    : loginEmail
       };
     });
-}
-function getDriversInitData() {
-  try {
-    const user    = ops_getUserInfo_();
-    const drivers = ops_getAllDrivers_();
-    return { success: true, user, drivers };
-  } catch(e) { return { success: false, message: e.message }; }
 }
 
 function ops_addDriver(payload) {
@@ -1241,7 +1275,6 @@ function ops_addDriver(payload) {
 
     const sh  = ops_sh_(OPS_SHEETS.DRIVERS);
     const id  = ops_genId_('D', drivers.map(function(d) { return [d.driverId]; }), 0);
-    const now = new Date();
 
     sh.getRange(sh.getLastRow() + 1, 1, 1, 8).setValues([[
       id,
@@ -1299,7 +1332,6 @@ function ops_updateDriver(payload) {
       payload.notes         || ''
     ]]);
 
-    // ✅ Update LoginUsers if email or password provided
     if (payload.email || payload.password) {
       var loginSh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('LoginUsers');
       if (loginSh && loginSh.getLastRow() >= 2) {
@@ -1314,7 +1346,6 @@ function ops_updateDriver(payload) {
             break;
           }
         }
-        // If not found, insert new login row
         if (!found && payload.email && payload.password) {
           loginSh.getRange(loginSh.getLastRow() + 1, 1, 1, 3).setValues([[
             payload.email.trim().toLowerCase(),
@@ -1352,55 +1383,8 @@ function ops_deleteDriver(driverId) {
 }
 
 // ============================================================
-//  PASTE THESE 2 THINGS IN YOUR Code.js
+//  TRIP TYPES — CRUD
 // ============================================================
-
-// ── PART 1: New function — paste anywhere (e.g. after ops_getSettings_) ──
-// Reads EmployeeName sheet: Col A = Employee Code, Col B = Team, Col C = Name of Employee
-
-function ops_getEmployeeList_() {
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sh = ss.getSheetByName('EmployeName');
-    if (!sh) return [];
-    const lr = sh.getLastRow();
-    if (lr < 2) return [];
-    return sh.getRange(2, 1, lr - 1, 3).getValues()
-      .filter(function(r) { return r[2] && String(r[2]).trim(); })
-      .map(function(r) {
-        return {
-          empCode : String(r[0] || '').trim(),
-          team    : String(r[1] || '').trim(),
-          name    : String(r[2] || '').trim()
-        };
-      });
-  } catch(e) {
-    Logger.log('ops_getEmployeList_ error: ' + e.message);
-    return [];
-  }
-}
-
-
-// ── PART 2: Replace your existing getTripsInitData() with this ──
-function getTripsInitData() {
-  try {
-    const user      = ops_getUserInfo_();
-    const trips     = ops_getAllTrips_();
-    const vehicles  = ops_getAllVehicles_();
-    const drivers   = ops_getAllDrivers_();
-    const employees = ops_getEmployeeList_();
-    const joResult  = ops_getJOList();
-    const joList    = joResult.success ? joResult.data : [];
-    const joError   = joResult.success ? null : joResult.message;
-    const tripTypes = ops_getTripTypes_().map(function(r) { return { value: r.value }; });
-    return { success: true, user, trips, vehicles, drivers, employees, joList, joError, tripTypes };
-  } catch(e) { return { success: false, message: e.message }; }
-}
-
-// ============================================================
-//  TRIP TYPES — CRUD (Settings sheet, key = 'trip_type')
-// ============================================================
-
 function ops_getTripTypes_() {
   const sh = ops_sh_(OPS_SHEETS.SETTINGS);
   const lr = sh.getLastRow();
@@ -1468,8 +1452,7 @@ function ops_deleteTripType(row) {
     row = parseInt(row);
     if (!row || row < 2) return { success: false, message: 'Invalid row.' };
 
-    const sh = ops_sh_(OPS_SHEETS.SETTINGS);
-    // Validate it's actually a trip_type row
+    const sh  = ops_sh_(OPS_SHEETS.SETTINGS);
     const key = String(sh.getRange(row, 1).getValue()).trim();
     if (key !== 'trip_type') return { success: false, message: 'Row is not a Trip Type.' };
 
