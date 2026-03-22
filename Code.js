@@ -180,44 +180,132 @@ function ops_sh_(name) {
 //  DATE HELPERS
 // ============================================================
 function ops_fmtDate_(val) {
-  if (!val) return '';
+  if (val === null || val === undefined || val === '') return '';
   try {
+    // Already a JS Date object (most common from getValues())
+    if (val instanceof Date) {
+      if (isNaN(val.getTime())) return '';
+      var y1 = val.getFullYear();
+      if (y1 < 1900 || y1 > 2200) return '';
+      return y1 + '-'
+        + String(val.getMonth() + 1).padStart(2, '0') + '-'
+        + String(val.getDate()).padStart(2, '0');
+    }
+
+    // Numeric serial date from Google Sheets
+    // Google's epoch is December 30, 1899
+    if (typeof val === 'number') {
+      if (val <= 0) return '';
+      var msPerDay  = 86400000;
+      var epoch     = new Date(1899, 11, 30).getTime(); // Dec 30, 1899
+      var d         = new Date(epoch + Math.floor(val) * msPerDay);
+      if (isNaN(d.getTime())) return '';
+      var y2 = d.getFullYear();
+      if (y2 < 1900 || y2 > 2200) return '';
+      return y2 + '-'
+        + String(d.getMonth() + 1).padStart(2, '0') + '-'
+        + String(d.getDate()).padStart(2, '0');
+    }
+
+    // String value
     var s = String(val).trim();
-    if (!s || s === '0' || s === '') return '';
-    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-    var d = (val instanceof Date) ? val : new Date(s);
-    if (isNaN(d.getTime())) return '';
-    var year = d.getFullYear();
-    if (year < 1900 || year > 2200) return '';
-    return year + '-'
-      + String(d.getMonth() + 1).padStart(2, '0') + '-'
-      + String(d.getDate()).padStart(2, '0');
-  } catch(e) { return ''; }
+    if (!s || s === '0') return '';
+
+    // Already in yyyy-mm-dd format
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+      var parts = s.split('-');
+      var y3    = parseInt(parts[0]);
+      if (y3 < 1900 || y3 > 2200) return '';
+      return s;
+    }
+
+    // Try parsing as a date string
+    var parsed = new Date(s);
+    if (isNaN(parsed.getTime())) return '';
+    var y4 = parsed.getFullYear();
+    if (y4 < 1900 || y4 > 2200) return '';
+    return y4 + '-'
+      + String(parsed.getMonth() + 1).padStart(2, '0') + '-'
+      + String(parsed.getDate()).padStart(2, '0');
+
+  } catch(e) {
+    Logger.log('ops_fmtDate_ error: ' + e.message + ' | val=' + val);
+    return '';
+  }
 }
 
 function ops_fmtDT_(val) {
-  if (!val) return '';
+  if (val === null || val === undefined || val === '') return '';
   try {
-    const d = (val instanceof Date) ? val : new Date(val);
+    var d;
+    var mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+    // Already a JS Date object
+    if (val instanceof Date) {
+      d = val;
+    }
+    // Numeric serial date from Google Sheets (date-only, no time)
+    else if (typeof val === 'number') {
+      if (val <= 0) return '';
+      var epoch = new Date(1899, 11, 30).getTime(); // Dec 30, 1899
+      d = new Date(epoch + Math.floor(val) * 86400000);
+    }
+    // String — try direct parse
+    else {
+      var s = String(val).trim();
+      if (!s || s === '0') return '';
+      d = new Date(s);
+    }
+
     if (isNaN(d.getTime())) return '';
-    const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    return mo[d.getMonth()] + ' ' + String(d.getDate()).padStart(2,'0')
-      + ', ' + d.getFullYear() + ' '
-      + String(d.getHours()).padStart(2,'0') + ':'
-      + String(d.getMinutes()).padStart(2,'0');
-  } catch(e) { return ''; }
+    var y = d.getFullYear();
+    if (y < 1900 || y > 2200) return '';
+
+    return mo[d.getMonth()] + ' ' + String(d.getDate()).padStart(2, '0')
+      + ', ' + y + ' '
+      + String(d.getHours()).padStart(2, '0') + ':'
+      + String(d.getMinutes()).padStart(2, '0');
+
+  } catch(e) {
+    Logger.log('ops_fmtDT_ error: ' + e.message + ' | val=' + val);
+    return '';
+  }
 }
 
 function ops_daysLeft_(dateStr) {
-  if (!dateStr || dateStr === '') return null;
+  if (dateStr === null || dateStr === undefined || dateStr === '') return null;
   try {
-    var parts = String(dateStr).split('-');
-    if (parts.length !== 3) return null;
-    var expiry = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-    var today  = new Date();
+    var expiry;
+
+    // Numeric serial date
+    if (typeof dateStr === 'number') {
+      if (dateStr <= 0) return null;
+      var epoch = new Date(1899, 11, 30).getTime();
+      expiry    = new Date(epoch + Math.floor(dateStr) * 86400000);
+    }
+    // JS Date object
+    else if (dateStr instanceof Date) {
+      expiry = dateStr;
+    }
+    // yyyy-mm-dd string
+    else {
+      var s = String(dateStr).trim();
+      if (!s || s === '0') return null;
+      var parts = s.split('-');
+      if (parts.length !== 3) return null;
+      expiry = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    }
+
+    if (isNaN(expiry.getTime())) return null;
+    var today = new Date();
     today.setHours(0, 0, 0, 0);
+    expiry.setHours(0, 0, 0, 0);
     return Math.ceil((expiry - today) / 86400000);
-  } catch(e) { return null; }
+
+  } catch(e) {
+    Logger.log('ops_daysLeft_ error: ' + e.message + ' | val=' + dateStr);
+    return null;
+  }
 }
 
 // DEBUG HELPER — run this in GAS editor to check raw sheet values
