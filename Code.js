@@ -563,6 +563,11 @@ function getDriversInitData() {
 // ============================================================
 //  DRIVER DASHBOARD — FIXED VERSION
 // ============================================================
+// ============================================================
+//  REPLACE getDriverDashboardData() in Code.js with this
+//  Email match is now PRIMARY — name match is fallback
+// ============================================================
+
 function getDriverDashboardData() {
   try {
     var user     = ops_getUserInfo_();
@@ -572,13 +577,12 @@ function getDriverDashboardData() {
     var driverName = '';
     var myTrips    = [];
 
-    // Helper: normalize string for comparison
     function normalize(s) {
       return String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
     }
 
     // ══════════════════════════════════════════════════════
-    //  STEP 1: Find driver name from LoginUsers → Drivers
+    //  STEP 1: Find driver name from Drivers sheet
     // ══════════════════════════════════════════════════════
     try {
       var ss       = SpreadsheetApp.getActiveSpreadsheet();
@@ -592,7 +596,7 @@ function getDriverDashboardData() {
         var loginData  = loginSh.getRange(2, 1, loginSh.getLastRow() - 1, 3).getValues();
         var driverData = driverSh.getRange(2, 1, driverSh.getLastRow() - 1, 8).getValues();
 
-        // Collect ONLY driver-role logins in order (must match Drivers sheet row order)
+        // Collect driver-role logins in order
         var driverOnlyLogins = [];
         for (var i = 0; i < loginData.length; i++) {
           var rowRole = String(loginData[i][2] || '').trim().toLowerCase();
@@ -601,26 +605,18 @@ function getDriverDashboardData() {
           }
         }
 
-        // Find this email's position among driver-only logins
+        // Find by index
         var driverLoginIndex = driverOnlyLogins.indexOf(email);
+        Logger.log('Email: [' + email + '] | Login index: ' + driverLoginIndex);
 
-        Logger.log('=== DRIVER LOOKUP ===');
-        Logger.log('Email: [' + email + ']');
-        Logger.log('Driver-only logins: ' + JSON.stringify(driverOnlyLogins));
-        Logger.log('Login index: ' + driverLoginIndex);
-        Logger.log('Driver records count: ' + driverData.length);
-
-        // Get name from Drivers sheet using same index
         if (driverLoginIndex >= 0 && driverLoginIndex < driverData.length) {
           driverName = String(driverData[driverLoginIndex][1] || '').trim();
           Logger.log('Found by index — driverName: [' + driverName + ']');
         }
 
-        // FIX: If index lookup failed, try matching by email username vs driver name
+        // Fallback: email username vs driver name
         if (!driverName) {
           var emailUser = email.split('@')[0].toLowerCase().replace(/[._\-]/g, ' ').trim();
-          Logger.log('Index failed. Trying email-username match: [' + emailUser + ']');
-
           for (var k = 0; k < driverData.length; k++) {
             var dn = normalize(String(driverData[k][1] || ''));
             if (!dn) continue;
@@ -640,75 +636,74 @@ function getDriverDashboardData() {
       Logger.log('Driver name lookup error: ' + e.message);
     }
 
-    Logger.log('=== FINAL driverName: [' + driverName + '] ===');
+    Logger.log('=== driverName resolved: [' + driverName + '] ===');
 
     // ══════════════════════════════════════════════════════
-    //  STEP 2: Match trips using multiple strategies
+    //  STEP 2: Match trips
+    //  ✅ Strategy 1 (PRIMARY): driverEmpId == email
+    //     This works for NEW trips (TabNewTrip stores login email)
     // ══════════════════════════════════════════════════════
+
+    // Strategy 1: exact email match on driverEmpId (most reliable)
+    myTrips = allTrips.filter(function(t) {
+      return normalize(t.driverEmpId) === email;
+    });
+    Logger.log('Strategy 1 (email match): ' + myTrips.length + ' trips');
+
+    // Strategy 2: name-based matching (for OLD trips saved before this fix)
+    var nameTrips = [];
     if (driverName) {
       var n = normalize(driverName);
-
-      myTrips = allTrips.filter(function(t) {
+      nameTrips = allTrips.filter(function(t) {
         var td = normalize(t.driverName);
         if (!td) return false;
-
-        // 1. Exact match
         if (td === n) return true;
-
-        // 2. One contains the other (handles partial names)
         if (td.indexOf(n) > -1 || n.indexOf(td) > -1) return true;
-
-        // 3. First name matches
         var nParts  = n.split(' ').filter(function(w) { return w.length >= 2; });
         var tdParts = td.split(' ').filter(function(w) { return w.length >= 2; });
         if (nParts.length > 0 && tdParts.length > 0 && nParts[0] === tdParts[0]) return true;
-
-        // 4. Last name matches
         if (nParts.length > 1 && tdParts.length > 1) {
           var nLast  = nParts[nParts.length - 1];
           var tdLast = tdParts[tdParts.length - 1];
           if (nLast === tdLast && nLast.length >= 3) return true;
         }
-
-        // 5. Two or more words match
         var matchCount = nParts.filter(function(w) {
           return w.length >= 3 && tdParts.indexOf(w) > -1;
         }).length;
         if (matchCount >= 2) return true;
-
         return false;
       });
-
-      Logger.log('Matched by driverName: ' + myTrips.length + ' trips');
+      Logger.log('Strategy 2 (name match): ' + nameTrips.length + ' trips');
     }
 
-    // Fallback 1: driverEmpId matches email
-    if (myTrips.length === 0) {
-      myTrips = allTrips.filter(function(t) {
-        return normalize(t.driverEmpId) === email;
-      });
-      if (myTrips.length > 0) Logger.log('Matched by driverEmpId: ' + myTrips.length);
-    }
+    // ✅ MERGE: combine both, deduplicate by tripId
+    var merged = myTrips.slice();
+    var existingIds = {};
+    myTrips.forEach(function(t) { existingIds[t.tripId] = true; });
+    nameTrips.forEach(function(t) {
+      if (!existingIds[t.tripId]) merged.push(t);
+    });
 
-    // Fallback 2: email username vs driverName in trips
-    if (myTrips.length === 0) {
+    // Strategy 3: email username vs driverName (last resort for very old data)
+    if (merged.length === 0) {
       var emailUser2 = email.split('@')[0].toLowerCase().replace(/[._\-]/g, ' ');
       var euParts2   = emailUser2.split(' ').filter(function(w) { return w.length >= 3; });
-      myTrips = allTrips.filter(function(t) {
+      merged = allTrips.filter(function(t) {
         var td = normalize(t.driverName);
         if (!td) return false;
         return euParts2.some(function(w) { return td.indexOf(w) > -1; });
       });
-      if (myTrips.length > 0) Logger.log('Matched by email-username fallback: ' + myTrips.length);
+      Logger.log('Strategy 3 (email-username fallback): ' + merged.length + ' trips');
     }
 
-    Logger.log('All driverNames in Trips: '
-      + allTrips.map(function(t) { return '[' + (t.driverName || '') + ']'; }).join(', '));
-    Logger.log('Total matched: ' + myTrips.length);
+    Logger.log('=== TOTAL matched trips: ' + merged.length + ' ===');
+    Logger.log('All driverEmpIds: ' + allTrips.map(function(t) {
+      return '[' + (t.driverEmpId || '') + ']';
+    }).join(', '));
 
     return {
       success    : true,
-      trips      : myTrips,
+      trips      : merged,
       driverName : driverName,
       driverEmail: email,
       user       : user

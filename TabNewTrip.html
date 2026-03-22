@@ -55,11 +55,11 @@
       <div class="o-divider">Trip Details</div>
       <div class="o-form-grid" style="margin-bottom:18px;">
         <div class="o-form-group">
-  <label class="o-label">Trip Type *</label>
-  <select id="nt-trip-type" class="o-input">
-    <option value="">-- Select Type --</option>
-  </select>
-</div>
+          <label class="o-label">Trip Type *</label>
+          <select id="nt-trip-type" class="o-input">
+            <option value="">-- Select Type --</option>
+          </select>
+        </div>
         <div class="o-form-group" style="position:relative;">
           <label class="o-label">Related JO <span style="color:var(--text3);font-weight:400;">(optional)</span></label>
           <div style="position:relative;">
@@ -173,8 +173,10 @@
         </div>
 
         <div class="o-form-group">
-          <label class="o-label">Driver Employee ID <span style="color:var(--text3);font-weight:400;">(optional)</span></label>
-          <input id="nt-driver-empid" class="o-input" placeholder="Auto-filled or e.g. EMP-002">
+          <label class="o-label">Driver Employee ID <span style="color:var(--text3);font-weight:400;">(auto)</span></label>
+          <!-- ✅ This now stores the driver's LOGIN EMAIL for reliable matching -->
+          <input id="nt-driver-empid" class="o-input" placeholder="Auto-filled" readonly
+            style="background:var(--surface);cursor:not-allowed;color:var(--text2);">
         </div>
       </div>
 
@@ -193,10 +195,13 @@
 var nt_vehicles       = [];
 var nt_drivers        = [];
 var nt_driverFiltered = [];
-var nt_employees      = [];   // from EmployeeName sheet
+var nt_employees      = [];
 var nt_empFiltered    = [];
 var nt_joList         = [];
 var nt_joFiltered     = [];
+
+// ✅ Store selected driver's login email here
+var nt_selectedDriverEmail = '';
 
 function init_new_trip() {
   document.getElementById('nt-jo-search').placeholder = 'Loading…';
@@ -206,22 +211,17 @@ function init_new_trip() {
     .withSuccessHandler(function(r) {
       if (!r.success) { o_toast('error', r.message || 'Init failed'); return; }
 
-      // Vehicles
       nt_vehicles = (r.vehicles || []).filter(function(v) { return v.status === 'Active'; });
       nt_populateVehicles();
-      // Vehicles
-      // Trip Types — dynamic from Settings sheet
+
       nt_populateTripTypes(r.tripTypes || []);
 
-      // Drivers (Active only) from Driver Master
       nt_drivers        = (r.drivers || []).filter(function(d) { return d.status === 'Active'; });
       nt_driverFiltered = nt_drivers.slice();
 
-      // Employees from EmployeeName sheet
       nt_employees   = r.employees || [];
       nt_empFiltered = nt_employees.slice();
 
-      // JO list
       nt_joList     = r.joList || [];
       nt_joFiltered = nt_joList.slice();
       var joInput   = document.getElementById('nt-jo-search');
@@ -240,7 +240,7 @@ function init_new_trip() {
 }
 
 // ══════════════════════════════════════
-//  REQUESTOR DROPDOWN (EmployeeName sheet)
+//  REQUESTOR DROPDOWN
 // ══════════════════════════════════════
 function nt_filterReq() {
   var q = (document.getElementById('nt-req-name').value || '').toLowerCase().trim();
@@ -288,11 +288,16 @@ function nt_hideReqDropdown() {
 }
 
 // ══════════════════════════════════════
-//  DRIVER DROPDOWN (Driver Master)
+//  DRIVER DROPDOWN
+//  ✅ KEY FIX: stores loginEmail in driverEmpId field
 // ══════════════════════════════════════
 function nt_filterDriver() {
   var q = (document.getElementById('nt-driver-name').value || '').toLowerCase().trim();
+
+  // Clear selected driver email when user types
+  nt_selectedDriverEmail = '';
   document.getElementById('nt-driver-empid').value = '';
+
   nt_driverFiltered = q
     ? nt_drivers.filter(function(d) {
         return d.name.toLowerCase().includes(q) || (d.licenseId || '').toLowerCase().includes(q);
@@ -312,7 +317,9 @@ function nt_renderDriverList() {
   nt_driverFiltered.slice(0, 50).forEach(function(d, i) {
     html += '<div class="nt-dropdown-item" data-drv-idx="' + i + '">'
           +   '<div class="item-name">' + o_esc(d.name) + '</div>'
-          +   '<div class="item-sub">🪪 ' + o_esc(d.licenseId) + (d.empId ? ' · ' + o_esc(d.empId) : '') + '</div>'
+          +   '<div class="item-sub">🪪 ' + o_esc(d.licenseId)
+          +     (d.loginEmail ? ' · <span style="color:var(--accent);">✉ ' + o_esc(d.loginEmail) + '</span>' : '')
+          +   '</div>'
           + '</div>';
   });
   container.innerHTML = html;
@@ -320,8 +327,16 @@ function nt_renderDriverList() {
     var idx = parseInt(el.getAttribute('data-drv-idx'));
     el.addEventListener('mousedown', function(ev) {
       ev.preventDefault();
-      document.getElementById('nt-driver-name').value  = nt_driverFiltered[idx].name;
-      document.getElementById('nt-driver-empid').value = nt_driverFiltered[idx].empId || '';
+      var driver = nt_driverFiltered[idx];
+
+      // ✅ Set driver name
+      document.getElementById('nt-driver-name').value = driver.name;
+
+      // ✅ Store login email as the driverEmpId for reliable matching
+      //    This is the KEY fix — driver dashboard matches by email
+      nt_selectedDriverEmail = driver.loginEmail || '';
+      document.getElementById('nt-driver-empid').value = driver.loginEmail || driver.empId || '';
+
       nt_hideDriverDropdown();
     });
   });
@@ -464,6 +479,7 @@ function nt_reset() {
   document.getElementById('nt-vehicle-id').value = '';
   document.getElementById('nt-jo-search').value  = '';
   document.getElementById('nt-jo-selected-badge').style.display = 'none';
+  nt_selectedDriverEmail = '';
   nt_hideJODropdown(); nt_hideDriverDropdown(); nt_hideReqDropdown();
 }
 
@@ -501,6 +517,10 @@ function nt_saveTrip(status) {
   draftBtn.disabled = true; submitBtn.disabled = true;
   submitBtn.textContent = status === 'Submitted' ? 'Submitting…' : 'Saving…';
 
+  // ✅ Use the stored login email as driverEmpId
+  //    This is what getDriverDashboardData() matches against
+  var driverEmpId = document.getElementById('nt-driver-empid').value.trim();
+
   google.script.run
     .withSuccessHandler(function(r) {
       draftBtn.disabled = false; submitBtn.disabled = false;
@@ -528,7 +548,7 @@ function nt_saveTrip(status) {
       fromLoc, toLoc, startDate, endDate,
       vehicleId,
       plate       : document.getElementById('nt-plate').value.trim(),
-      driverEmpId : document.getElementById('nt-driver-empid').value.trim(),
+      driverEmpId : driverEmpId,   // ✅ Now stores login email
       driverName, status
     });
 }
