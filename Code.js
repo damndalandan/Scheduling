@@ -302,6 +302,15 @@ function ops_toISO_(val) {
   }
 }
 
+function ops_now_() {
+  // Returns current datetime formatted in Philippine Standard Time (UTC+8)
+  // Safe regardless of spreadsheet-level timezone setting
+  var now       = new Date();
+  var pstOffset = 8 * 60; // PST is UTC+8, no DST
+  var utc       = now.getTime() + (now.getTimezoneOffset() * 60000);
+  return new Date(utc + (pstOffset * 60000));
+}
+
 function ops_daysLeft_(dateStr) {
   if (dateStr === null || dateStr === undefined || dateStr === '') return null;
   try {
@@ -396,9 +405,24 @@ function ops_isAdmin_(r)    { return r.toLowerCase().includes('admin'); }
 function ops_isApprover_(r) { return r.toLowerCase().includes('approver') || ops_isAdmin_(r); }
 function ops_isEncoder_(r)  { return r.toLowerCase().includes('encoder') || r.toLowerCase().includes('operator') || ops_isAdmin_(r); }
 
+function ops_hashPassword_(plaintext) {
+  // SHA-256 hash using Apps Script's built-in Utilities
+  // Returns a lowercase hex string
+  var bytes  = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    String(plaintext),
+    Utilities.Charset.UTF_8
+  );
+  return bytes.map(function(b) {
+    var hex = (b & 0xff).toString(16);
+    return hex.length === 1 ? '0' + hex : hex;
+  }).join('');
+}
+
 // ============================================================
 //  LOGIN
 // ============================================================
+
 function ops_verifySession(email) {
   try {
     var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('LoginUsers');
@@ -439,7 +463,7 @@ function ops_audit_(action, payload) {
     const user = ops_getUserInfo_();
     sh.insertRowBefore(2);
     sh.getRange(2, 1, 1, 5).setValues([[
-      new Date(), action, user.email, user.role, JSON.stringify(payload)
+      ops_now_(), action, user.email, user.role, JSON.stringify(payload)
     ]]);
   } catch(e) { Logger.log('audit error: ' + e.message); }
 }
@@ -828,7 +852,7 @@ function ops_driverCompleteTrip(payload) {
 
     var distance = endKm - startKm;
     var sh       = ops_sh_(OPS_SHEETS.TRIPS);
-    var now      = new Date();
+    var now = ops_now_();
 
     sh.getRange(row.idx, TRIP_COL.STATUS       + 1).setValue(TRIP_STATUS.COMPLETED);
     sh.getRange(row.idx, TRIP_COL.ACTUAL_START + 1).setValue(payload.actualStart);
@@ -912,7 +936,7 @@ function ops_addVehicle(payload) {
 
     var sh  = ops_sh_(OPS_SHEETS.VEHICLES);
     var id  = ops_genId_('V', vehicles.map(function(v) { return [v.vehicleId]; }), 0);
-    var now = new Date();
+    var now = ops_now_();
 
     sh.getRange(sh.getLastRow() + 1, 1, 1, 13).setValues([[
       id,
@@ -969,7 +993,7 @@ function ops_updateVehicle(payload) {
       payload.ltoLink  || '',
       payload.notes    || '',
       data[rowIdx - 2][VEH_COL.CREATED_AT],
-      new Date()
+      ops_now_()
     ]]);
 
     ops_audit_('OPS_UPDATE_VEHICLE', { vehicleId: payload.vehicleId, by: user.email });
@@ -1077,7 +1101,7 @@ function ops_saveTrip(payload) {
     var trips = ops_getAllTrips_();
     var sh    = ops_sh_(OPS_SHEETS.TRIPS);
     var id    = ops_genId_('T', trips.map(function(t) { return [t.tripId]; }), 0);
-    var now   = new Date();
+    var now = ops_now_();
 
     sh.getRange(sh.getLastRow() + 1, 1, 1, 29).setValues([[
       id, now,
@@ -1126,7 +1150,7 @@ function ops_approveTrip(tripId) {
       return { success: false, message: 'Trip must be Submitted to approve.' };
 
     const sh  = ops_sh_(OPS_SHEETS.TRIPS);
-    const now = new Date();
+    var now = ops_now_();
     sh.getRange(row.idx, TRIP_COL.STATUS        + 1).setValue(TRIP_STATUS.APPROVED);
     sh.getRange(row.idx, TRIP_COL.APPROVED_BY   + 1).setValue(user.email);
     sh.getRange(row.idx, TRIP_COL.APPROVAL_DATE + 1).setValue(now);
@@ -1150,7 +1174,7 @@ function ops_rejectTrip(tripId, reason) {
     if (!row) return { success: false, message: 'Trip not found.' };
 
     const sh  = ops_sh_(OPS_SHEETS.TRIPS);
-    const now = new Date();
+    var now = ops_now_();
     sh.getRange(row.idx, TRIP_COL.STATUS        + 1).setValue(TRIP_STATUS.REJECTED);
     sh.getRange(row.idx, TRIP_COL.REJECT_REASON + 1).setValue(reason.trim());
     sh.getRange(row.idx, TRIP_COL.APPROVED_BY   + 1).setValue(user.email);
@@ -1177,7 +1201,7 @@ function ops_cancelTrip(tripId, reason) {
       return { success: false, message: 'Cannot cancel a ' + row.data[TRIP_COL.STATUS] + ' trip.' };
 
     const sh  = ops_sh_(OPS_SHEETS.TRIPS);
-    const now = new Date();
+    var now = ops_now_();
     sh.getRange(row.idx, TRIP_COL.STATUS        + 1).setValue(TRIP_STATUS.CANCELLED);
     sh.getRange(row.idx, TRIP_COL.CANCEL_REASON + 1).setValue(reason.trim());
     sh.getRange(row.idx, TRIP_COL.UPDATED_AT    + 1).setValue(now);
@@ -1226,7 +1250,7 @@ function ops_completeTrip(payload) {
 
     var distance = endKm - startKm;
     var sh       = ops_sh_(OPS_SHEETS.TRIPS);
-    var now      = new Date();
+    var now = ops_now_();
 
     sh.getRange(row.idx, TRIP_COL.STATUS       + 1).setValue(TRIP_STATUS.COMPLETED);
     sh.getRange(row.idx, TRIP_COL.ACTUAL_START + 1).setValue(payload.actualStart);
@@ -1451,7 +1475,7 @@ function ops_addDriver(payload) {
 
     loginSh.getRange(loginSh.getLastRow() + 1, 1, 1, 4).setValues([[
       payload.email.trim().toLowerCase(),
-      payload.password,
+      ops_hashPassword_(payload.password),
       'driver',
       id
     ]]);
@@ -1511,14 +1535,14 @@ function ops_updateDriver(payload) {
           var rowRole  = String(loginData[i][2] || '').toLowerCase();
           if (rowRole === 'driver' && payload.email && rowEmail === payload.email.toLowerCase()) {
             found = true;
-            if (payload.password) loginSh.getRange(i + 2, 2).setValue(payload.password);
+            if (payload.password) loginSh.getRange(i + 2, 2).setValue(ops_hashPassword_(payload.password));
             break;
           }
         }
         if (!found && payload.email && payload.password) {
           loginSh.getRange(loginSh.getLastRow() + 1, 1, 1, 4).setValues([[
             payload.email.trim().toLowerCase(),
-            payload.password,
+            ops_hashPassword_(payload.password),
             'driver',
             payload.driverId
           ]]);
@@ -1642,4 +1666,70 @@ function seedTripTypes() {
     'Other'
   ];
   types.forEach(function(t) { sh.appendRow(['trip_type', t]); });
+}
+
+function ops_fixSpreadsheetTimezone() {
+  // Run this once from the Apps Script editor to update
+  // the spreadsheet's own timezone setting to Philippine Standard Time
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  ss.setSpreadsheetTimeZone('Asia/Manila');
+  Logger.log('Spreadsheet timezone updated to: ' + ss.getSpreadsheetTimeZone());
+}
+
+function ops_migratePasswordsToHash() {
+  // ONE-TIME migration — run from the Apps Script editor, never from the web app
+  // Converts all plaintext passwords in LoginUsers to SHA-256 hashes
+  var ss  = SpreadsheetApp.getActiveSpreadsheet();
+  var sh  = ss.getSheetByName('LoginUsers');
+  if (!sh) { Logger.log('LoginUsers sheet not found.'); return; }
+
+  var lr = sh.getLastRow();
+  if (lr < 2) { Logger.log('No users to migrate.'); return; }
+
+  var data      = sh.getRange(2, 1, lr - 1, 2).getValues();
+  var migrated  = 0;
+  var skipped   = 0;
+
+  for (var i = 0; i < data.length; i++) {
+    var rowPw = String(data[i][1] || '').trim();
+
+    // Skip if already hashed (64-char lowercase hex)
+    if (/^[0-9a-f]{64}$/.test(rowPw)) {
+      skipped++;
+      continue;
+    }
+
+    // Hash the plaintext password and write it back
+    var hashed = ops_hashPassword_(rowPw);
+    sh.getRange(i + 2, 2).setValue(hashed);
+    migrated++;
+  }
+
+  SpreadsheetApp.flush();
+  Logger.log('Migration complete. Migrated: ' + migrated + ', Already hashed: ' + skipped);
+}
+
+function ops_resetPassword(targetEmail, newPassword) {
+  // Run from the Apps Script editor only — never exposed to the web app
+  // Usage: ops_resetPassword('user@email.com', 'newpassword123')
+  var ss  = SpreadsheetApp.getActiveSpreadsheet();
+  var sh  = ss.getSheetByName('LoginUsers');
+  if (!sh) { Logger.log('LoginUsers sheet not found.'); return; }
+
+  var lr   = sh.getLastRow();
+  if (lr < 2) { Logger.log('No users found.'); return; }
+
+  var data  = sh.getRange(2, 1, lr - 1, 1).getValues();
+  var email = String(targetEmail || '').trim().toLowerCase();
+
+  for (var i = 0; i < data.length; i++) {
+    if (String(data[i][0] || '').trim().toLowerCase() === email) {
+      sh.getRange(i + 2, 2).setValue(ops_hashPassword_(newPassword));
+      SpreadsheetApp.flush();
+      Logger.log('Password reset successful for: ' + email);
+      return;
+    }
+  }
+
+  Logger.log('Email not found: ' + email);
 }
