@@ -456,18 +456,52 @@ function o_logout() {
 
 // Boot is handled by TabLogin.html — lg_submit() calls switchTab + init_dashboard after login.
 
-// ✅ AUTO-RESTORE SESSION ON REFRESH
+// AUTO-RESTORE SESSION ON REFRESH — verified against server
 (function() {
   var savedEmail = sessionStorage.getItem('ops_email');
   var savedRole  = sessionStorage.getItem('ops_role');
-  if (savedEmail && savedRole) {
-    var screen = document.getElementById('login-screen');
-    if (screen) screen.style.display = 'none';
-    document.getElementById('o-user-email').textContent  = savedEmail;
-    document.getElementById('o-user-avatar').textContent = savedEmail.charAt(0).toUpperCase();
-    document.getElementById('o-role-badge').textContent  = savedRole;
-    o_applyRoleUI(savedRole);
-  }
+
+  if (!savedEmail || !savedRole) return;
+
+  // Show a subtle loading state while we verify
+  var screen = document.getElementById('login-screen');
+  var badge  = document.getElementById('o-role-badge');
+  if (badge) badge.textContent = 'Verifying\u2026';
+
+  google.script.run
+    .withSuccessHandler(function(r) {
+      if (r.success) {
+        // Server confirmed — restore session
+        sessionStorage.setItem('ops_email', r.email);
+        sessionStorage.setItem('ops_role',  r.role);
+
+        if (screen) screen.style.display = 'none';
+        document.getElementById('o-user-email').textContent  = r.email;
+        document.getElementById('o-user-avatar').textContent = r.email.charAt(0).toUpperCase();
+        document.getElementById('o-role-badge').textContent  = r.role;
+        o_applyRoleUI(r.role);
+      } else {
+        // Server rejected — clear storage and show login
+        sessionStorage.removeItem('ops_email');
+        sessionStorage.removeItem('ops_role');
+        if (badge) badge.textContent = 'Loading\u2026';
+        if (screen) {
+          screen.style.opacity    = '1';
+          screen.style.display    = 'flex';
+        }
+      }
+    })
+    .withFailureHandler(function() {
+      // Network error — clear storage and show login
+      sessionStorage.removeItem('ops_email');
+      sessionStorage.removeItem('ops_role');
+      if (badge) badge.textContent = 'Loading\u2026';
+      if (screen) {
+        screen.style.opacity = '1';
+        screen.style.display = 'flex';
+      }
+    })
+    .ops_verifySession(savedEmail);
 })();
 
 </script>

@@ -281,41 +281,34 @@ function ops_isEncoder_(r)  { return r.toLowerCase().includes('encoder') || r.to
 // ============================================================
 //  LOGIN
 // ============================================================
-function ops_loginUser(email, password) {
+function ops_verifySession(email) {
   try {
     var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('LoginUsers');
-    if (!sh) return { success: false, message: 'LoginUsers sheet not found. Please contact admin.' };
+    if (!sh) return { success: false, message: 'LoginUsers sheet not found.' };
 
     var lr = sh.getLastRow();
-    if (lr < 2) return { success: false, message: 'No users registered yet.' };
+    if (lr < 2) return { success: false, message: 'No users registered.' };
 
-    var data = sh.getRange(2, 1, lr - 1, 3).getValues();
-
+    var data       = sh.getRange(2, 1, lr - 1, 4).getValues();
     var inputEmail = String(email || '').trim().toLowerCase();
-    var inputPw    = String(password || '').trim();
 
     for (var i = 0; i < data.length; i++) {
       var rowEmail = String(data[i][0] || '').trim().toLowerCase();
-      var rowPw    = String(data[i][1] || '').trim();
       var rowRole  = String(data[i][2] || '').trim();
-
+      var rowDrvId = String(data[i][3] || '').trim();
       if (rowEmail === inputEmail) {
-        if (rowPw === inputPw) {
-          return {
-            success : true,
-            email   : rowEmail,
-            role    : rowRole || 'No Role',
-            message : 'Login successful.'
-          };
-        } else {
-          return { success: false, message: 'Incorrect password. Please try again.' };
-        }
+        return {
+          success  : true,
+          email    : rowEmail,
+          role     : rowRole || 'No Role',
+          driverId : rowDrvId
+        };
       }
     }
 
-    return { success: false, message: 'Email not found. Please check your email or contact admin.' };
+    return { success: false, message: 'Session invalid. Please log in again.' };
   } catch(e) {
-    return { success: false, message: 'Login error: ' + e.message };
+    return { success: false, message: 'Verify error: ' + e.message };
   }
 }
 
@@ -569,184 +562,79 @@ function getDriversInitData() {
 
 function getDriverDashboardData() {
   try {
-    var user     = ops_getUserInfo_();
-    var email    = user.email.toLowerCase().trim();
-    var allTrips = ops_getAllTrips_();
-    var myTrips  = [];
+    var user  = ops_getUserInfo_();
+    var email = user.email.toLowerCase().trim();
+
+    // ── Step 1: Look up driverId directly from LoginUsers column 4 ──
+    var driverId   = '';
     var driverName = '';
 
-    function norm(s) {
-      return String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
-    }
-
-    // ══════════════════════════════════════════════════════
-    //  STEP 1: Find this driver's name from the Drivers sheet
-    //  Strategy: scan Drivers sheet, find the row whose name
-    //  best matches the email username (no index dependency)
-    // ══════════════════════════════════════════════════════
     try {
-      var ss       = SpreadsheetApp.getActiveSpreadsheet();
-      var loginSh  = ss.getSheetByName('LoginUsers');
-      var driverSh = ss.getSheetByName('Drivers');
+      var ss      = SpreadsheetApp.getActiveSpreadsheet();
+      var loginSh = ss.getSheetByName('LoginUsers');
 
-      if (loginSh && driverSh
-          && loginSh.getLastRow() >= 2
-          && driverSh.getLastRow() >= 2) {
-
-        var loginData  = loginSh.getRange(2, 1, loginSh.getLastRow() - 1, 3).getValues();
-        var driverData = driverSh.getRange(2, 1, driverSh.getLastRow() - 1, 8).getValues();
-
-        Logger.log('=== DRIVER LOOKUP ===');
-        Logger.log('Logged-in email: [' + email + ']');
-
-        // ── Method A: Check if this email exists in LoginUsers as a driver ──
-        var isDriverLogin = false;
-        var emailUsername = email.split('@')[0].toLowerCase(); // e.g. "simon"
-
+      if (loginSh && loginSh.getLastRow() >= 2) {
+        var loginData = loginSh.getRange(2, 1, loginSh.getLastRow() - 1, 4).getValues();
         for (var i = 0; i < loginData.length; i++) {
           var rowEmail = String(loginData[i][0] || '').trim().toLowerCase();
           var rowRole  = String(loginData[i][2] || '').trim().toLowerCase();
-          if (rowEmail === email && rowRole === 'driver') {
-            isDriverLogin = true;
+          var rowDrvId = String(loginData[i][3] || '').trim();
+          if (rowEmail === email && rowRole === 'driver' && rowDrvId) {
+            driverId = rowDrvId;
             break;
-          }
-        }
-
-        Logger.log('Is driver login: ' + isDriverLogin);
-        Logger.log('Email username: [' + emailUsername + ']');
-
-        // ── Method B: Find matching driver in Drivers sheet ──
-        // Score each driver row by how well it matches the email username
-        var bestScore = 0;
-        var bestName  = '';
-
-        for (var k = 0; k < driverData.length; k++) {
-          var dn = norm(String(driverData[k][1] || ''));
-          if (!dn) continue;
-
-          var score = 0;
-
-          // Split driver name into words
-          var dnWords = dn.split(' ');
-
-          // Check each word of driver name against email username
-          dnWords.forEach(function(word) {
-            if (word.length >= 3) {
-              if (emailUsername === word) {
-                score += 10; // exact word match
-              } else if (emailUsername.indexOf(word) > -1 || word.indexOf(emailUsername) > -1) {
-                score += 5;  // partial match
-              }
-            }
-          });
-
-          // Also check full name contains email username
-          if (dn.indexOf(emailUsername) > -1) score += 3;
-
-          Logger.log('Driver [' + dn + '] score: ' + score);
-
-          if (score > bestScore) {
-            bestScore = score;
-            bestName  = String(driverData[k][1] || '').trim();
-          }
-        }
-
-        if (bestScore > 0) {
-          driverName = bestName;
-          Logger.log('Best match: [' + driverName + '] score=' + bestScore);
-        }
-
-        // ── Method C: If still no name, try index as last resort ──
-        if (!driverName) {
-          var driverOnlyEmails = [];
-          for (var j = 0; j < loginData.length; j++) {
-            if (String(loginData[j][2] || '').trim().toLowerCase() === 'driver') {
-              driverOnlyEmails.push(String(loginData[j][0] || '').trim().toLowerCase());
-            }
-          }
-          var idx = driverOnlyEmails.indexOf(email);
-          Logger.log('Index fallback: driver login index=' + idx + ' of ' + driverOnlyEmails.length);
-          if (idx >= 0 && idx < driverData.length) {
-            driverName = String(driverData[idx][1] || '').trim();
-            Logger.log('Index fallback name: [' + driverName + ']');
           }
         }
       }
     } catch(e) {
-      Logger.log('Driver lookup error: ' + e.message);
+      Logger.log('LoginUsers lookup error: ' + e.message);
     }
 
-    Logger.log('=== RESOLVED driverName: [' + driverName + '] ===');
-
-    // ══════════════════════════════════════════════════════
-    //  STEP 2: Match trips by driverName
-    // ══════════════════════════════════════════════════════
-    if (driverName) {
-      var n = norm(driverName);
-
-      myTrips = allTrips.filter(function(t) {
-        var td = norm(t.driverName);
-        if (!td) return false;
-
-        // Exact match
-        if (td === n) return true;
-
-        // One contains the other
-        if (td.indexOf(n) > -1 || n.indexOf(td) > -1) return true;
-
-        // Word-by-word comparison
-        var nWords  = n.split(' ').filter(function(w) { return w.length >= 3; });
-        var tdWords = td.split(' ').filter(function(w) { return w.length >= 3; });
-
-        // First name matches
-        if (nWords.length > 0 && tdWords.length > 0 && nWords[0] === tdWords[0]) return true;
-
-        // Last name matches
-        if (nWords.length > 1 && tdWords.length > 1) {
-          var nLast  = nWords[nWords.length - 1];
-          var tdLast = tdWords[tdWords.length - 1];
-          if (nLast === tdLast && nLast.length >= 3) return true;
+    // ── Step 2: Get driver name from Drivers sheet using driverId ──
+    if (driverId) {
+      try {
+        var driverSh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Drivers');
+        if (driverSh && driverSh.getLastRow() >= 2) {
+          var driverData = driverSh.getRange(2, 1, driverSh.getLastRow() - 1, 8).getValues();
+          for (var j = 0; j < driverData.length; j++) {
+            if (String(driverData[j][0] || '').trim() === driverId) {
+              driverName = String(driverData[j][1] || '').trim();
+              break;
+            }
+          }
         }
-
-        // 2+ words match
-        var matchCount = nWords.filter(function(w) {
-          return w.length >= 3 && tdWords.indexOf(w) > -1;
-        }).length;
-        if (matchCount >= 2) return true;
-
-        return false;
-      });
-
-      Logger.log('Matched by driverName: ' + myTrips.length + ' trips');
+      } catch(e) {
+        Logger.log('Drivers sheet lookup error: ' + e.message);
+      }
     }
 
-    // Fallback: match by driverEmpId == email (for future trips)
-    if (myTrips.length === 0) {
+    Logger.log('Driver login: email=[' + email + '] driverId=[' + driverId + '] name=[' + driverName + ']');
+
+    // ── Step 3: Match trips by driverId stored in DRIVER_EMP_ID column ──
+    var allTrips = ops_getAllTrips_();
+    var myTrips  = [];
+
+    if (driverId) {
       myTrips = allTrips.filter(function(t) {
-        return norm(t.driverEmpId) === email;
+        return String(t.driverEmpId || '').trim() === driverId;
       });
-      if (myTrips.length > 0) Logger.log('Matched by driverEmpId email: ' + myTrips.length);
     }
 
-    // Last resort: email username in driverName
-    if (myTrips.length === 0) {
-      var eu = email.split('@')[0].toLowerCase().replace(/[._\-]/g, ' ');
-      var euParts = eu.split(' ').filter(function(w) { return w.length >= 3; });
-      myTrips = allTrips.filter(function(t) {
-        var td = norm(t.driverName);
-        return euParts.some(function(w) { return td.indexOf(w) > -1; });
+    // ── Fallback: match by driverName if driverId not yet stored on older trips ──
+    if (myTrips.length === 0 && driverName) {
+      var norm = function(s) { return String(s || '').toLowerCase().replace(/\s+/g, ' ').trim(); };
+      var n    = norm(driverName);
+      myTrips  = allTrips.filter(function(t) {
+        return norm(t.driverName) === n;
       });
-      if (myTrips.length > 0) Logger.log('Matched by email-username last resort: ' + myTrips.length);
     }
 
-    Logger.log('All driverNames in Trips: ' +
-      allTrips.map(function(t) { return '[' + (t.driverName || '') + ']'; }).join(', '));
-    Logger.log('TOTAL matched: ' + myTrips.length);
+    Logger.log('Matched trips: ' + myTrips.length);
 
     return {
       success    : true,
       trips      : myTrips,
       driverName : driverName,
+      driverId   : driverId,
       driverEmail: email,
       user       : user
     };
@@ -1247,9 +1135,9 @@ function ops_getAllDrivers_() {
   try {
     var loginSh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('LoginUsers');
     if (loginSh && loginSh.getLastRow() >= 2) {
-      loginSh.getRange(2, 1, loginSh.getLastRow() - 1, 3).getValues().forEach(function(r) {
+      loginSh.getRange(2, 1, loginSh.getLastRow() - 1, 4).getValues().forEach(function(r) {
         if (String(r[2]).trim().toLowerCase() === 'driver') {
-          loginMap[String(r[0]).trim().toLowerCase()] = String(r[0]).trim();
+          loginMap[String(r[3]).trim()] = String(r[0]).trim(); // driverId → email
         }
       });
     }
@@ -1258,13 +1146,8 @@ function ops_getAllDrivers_() {
   return sh.getRange(2, 1, lr - 1, 8).getValues()
     .filter(function(r) { return r[DRIVER_COL.DRIVER_ID] && String(r[DRIVER_COL.DRIVER_ID]).trim(); })
     .map(function(r) {
-      var driverName = String(r[DRIVER_COL.NAME] || '').trim().toLowerCase();
-      var loginEmail = '';
-      Object.keys(loginMap).forEach(function(em) {
-        if (em.indexOf(driverName.split(' ')[0]) > -1 || driverName.indexOf(em.split('@')[0]) > -1) {
-          loginEmail = loginMap[em];
-        }
-      });
+      var dId        = String(r[DRIVER_COL.DRIVER_ID] || '').trim();
+      var loginEmail = loginMap[dId] || '';
       return {
         driverId      : String(r[DRIVER_COL.DRIVER_ID]).trim(),
         name          : String(r[DRIVER_COL.NAME]           || '').trim(),
@@ -1324,10 +1207,11 @@ function ops_addDriver(payload) {
       payload.notes         || ''
     ]]);
 
-    loginSh.getRange(loginSh.getLastRow() + 1, 1, 1, 3).setValues([[
+    loginSh.getRange(loginSh.getLastRow() + 1, 1, 1, 4).setValues([[
       payload.email.trim().toLowerCase(),
       payload.password,
-      'driver'
+      'driver',
+      id
     ]]);
 
     ops_audit_('OPS_ADD_DRIVER', { driverId: id, name: payload.name, email: payload.email, by: user.email });
@@ -1384,10 +1268,11 @@ function ops_updateDriver(payload) {
           }
         }
         if (!found && payload.email && payload.password) {
-          loginSh.getRange(loginSh.getLastRow() + 1, 1, 1, 3).setValues([[
+          loginSh.getRange(loginSh.getLastRow() + 1, 1, 1, 4).setValues([[
             payload.email.trim().toLowerCase(),
             payload.password,
-            'Driver'
+            'driver',
+            payload.driverId
           ]]);
         }
       }
