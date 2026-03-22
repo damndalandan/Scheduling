@@ -327,12 +327,12 @@ function ops_debugVehicles() {
 //  ID GENERATOR
 // ============================================================
 function ops_genId_(prefix, rows, col) {
-  const year = new Date().getFullYear();
-  let max = 0;
+  var year = new Date().getFullYear();
+  var max  = 0;
   rows.forEach(function(r) {
-    const id = String(r[col] || '');
-    const m  = id.match(/-(\d{4})$/);
-    if (m) { const n = parseInt(m[1]); if (n > max) max = n; }
+    var id = String(r[col] || '');
+    var m  = id.match(/-(\d{4})$/);
+    if (m) { var n = parseInt(m[1]); if (n > max) max = n; }
   });
   return prefix + '-' + year + '-' + String(max + 1).padStart(4, '0');
 }
@@ -811,39 +811,54 @@ function ops_getAllVehicles_() {
 }
 
 function ops_addVehicle(payload) {
+  if (!payload.plate || !payload.type)
+    return { success: false, message: 'Plate Number and Vehicle Type are required.' };
+
+  var lock = LockService.getScriptLock();
   try {
-    const user = ops_getUserInfo_();
+    lock.waitLock(10000);
+  } catch(e) {
+    return { success: false, message: 'Server busy. Please try again in a moment.' };
+  }
+
+  try {
+    var user = ops_getUserInfo_();
     if (!ops_isAdmin_(user.role) && !ops_isEncoder_(user.role))
       return { success: false, message: 'Access denied.' };
-    if (!payload.plate || !payload.type)
-      return { success: false, message: 'Plate Number and Vehicle Type are required.' };
 
-    const vehicles = ops_getAllVehicles_();
-    if (vehicles.some(function(v) { return v.plate.toLowerCase() === payload.plate.trim().toLowerCase(); }))
-      return { success: false, message: 'Plate number "' + payload.plate + '" already exists.' };
+    var vehicles = ops_getAllVehicles_();
+    if (vehicles.some(function(v) {
+      return v.plate.toLowerCase() === payload.plate.trim().toLowerCase();
+    })) return { success: false, message: 'Plate number "' + payload.plate + '" already exists.' };
 
-    const sh  = ops_sh_(OPS_SHEETS.VEHICLES);
-    const id  = ops_genId_('V', vehicles.map(function(v) { return [v.vehicleId]; }), 0);
-    const now = new Date();
+    var sh  = ops_sh_(OPS_SHEETS.VEHICLES);
+    var id  = ops_genId_('V', vehicles.map(function(v) { return [v.vehicleId]; }), 0);
+    var now = new Date();
 
     sh.getRange(sh.getLastRow() + 1, 1, 1, 13).setValues([[
       id,
       payload.plate.trim().toUpperCase(),
       payload.type,
-      payload.brand    || '',
+      payload.brand     || '',
       parseFloat(payload.begMileage) || 0,
-      payload.status   || VEH_STATUS.ACTIVE,
-      payload.insExpiry|| '',
-      payload.insLink  || '',
-      payload.ltoExpiry|| '',
-      payload.ltoLink  || '',
-      payload.notes    || '',
+      payload.status    || VEH_STATUS.ACTIVE,
+      payload.insExpiry || '',
+      payload.insLink   || '',
+      payload.ltoExpiry || '',
+      payload.ltoLink   || '',
+      payload.notes     || '',
       now, now
     ]]);
 
+    SpreadsheetApp.flush();
     ops_audit_('OPS_ADD_VEHICLE', { vehicleId: id, plate: payload.plate, by: user.email });
     return { success: true, message: 'Vehicle ' + id + ' added.', vehicleId: id };
-  } catch(e) { return { success: false, message: e.message }; }
+
+  } catch(e) {
+    return { success: false, message: e.message };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function ops_updateVehicle(payload) {
@@ -953,25 +968,34 @@ function ops_getAllTrips_() {
 }
 
 function ops_saveTrip(payload) {
+  // Validate before acquiring lock — fail fast
+  if (!payload.reqName)   return { success: false, message: 'Requestor Name required.' };
+  if (!payload.tripType)  return { success: false, message: 'Trip Type required.' };
+  if (!payload.purpose)   return { success: false, message: 'Purpose required.' };
+  if (!payload.fromLoc)   return { success: false, message: 'From Location required.' };
+  if (!payload.toLoc)     return { success: false, message: 'To Location required.' };
+  if (!payload.startDate) return { success: false, message: 'Planned Start required.' };
+  if (!payload.endDate)   return { success: false, message: 'Planned End required.' };
+
+  if (payload.status === TRIP_STATUS.SUBMITTED) {
+    if (!payload.vehicleId)  return { success: false, message: 'Vehicle required to submit.' };
+    if (!payload.driverName) return { success: false, message: 'Driver required to submit.' };
+  }
+
+  var lock = LockService.getScriptLock();
   try {
-    const user = ops_getUserInfo_();
-    if (!payload.reqName)   return { success: false, message: 'Requestor Name required.' };
-    if (!payload.tripType)  return { success: false, message: 'Trip Type required.' };
-    if (!payload.purpose)   return { success: false, message: 'Purpose required.' };
-    if (!payload.fromLoc)   return { success: false, message: 'From Location required.' };
-    if (!payload.toLoc)     return { success: false, message: 'To Location required.' };
-    if (!payload.startDate) return { success: false, message: 'Planned Start required.' };
-    if (!payload.endDate)   return { success: false, message: 'Planned End required.' };
+    // Wait up to 10 seconds for the lock — rejects if another save is mid-flight
+    lock.waitLock(10000);
+  } catch(e) {
+    return { success: false, message: 'Server busy. Please try again in a moment.' };
+  }
 
-    if (payload.status === TRIP_STATUS.SUBMITTED) {
-      if (!payload.vehicleId)  return { success: false, message: 'Vehicle required to submit.' };
-      if (!payload.driverName) return { success: false, message: 'Driver required to submit.' };
-    }
-
-    const trips = ops_getAllTrips_();
-    const sh    = ops_sh_(OPS_SHEETS.TRIPS);
-    const id    = ops_genId_('T', trips.map(function(t) { return [t.tripId]; }), 0);
-    const now   = new Date();
+  try {
+    var user  = ops_getUserInfo_();
+    var trips = ops_getAllTrips_();
+    var sh    = ops_sh_(OPS_SHEETS.TRIPS);
+    var id    = ops_genId_('T', trips.map(function(t) { return [t.tripId]; }), 0);
+    var now   = new Date();
 
     sh.getRange(sh.getLastRow() + 1, 1, 1, 29).setValues([[
       id, now,
@@ -995,9 +1019,17 @@ function ops_saveTrip(payload) {
       now, user.email
     ]]);
 
+    // Flush immediately so the lock is held until the write is committed
+    SpreadsheetApp.flush();
+
     ops_audit_('OPS_SAVE_TRIP', { tripId: id, status: payload.status, by: user.email });
     return { success: true, message: 'Trip ' + id + ' saved as ' + payload.status + '.', tripId: id };
-  } catch(e) { return { success: false, message: e.message }; }
+
+  } catch(e) {
+    return { success: false, message: e.message };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function ops_approveTrip(tripId) {
@@ -1251,16 +1283,25 @@ function ops_getAllDrivers_() {
 }
 
 function ops_addDriver(payload) {
+  // Validate before acquiring lock
+  if (!payload.name)      return { success: false, message: 'Full Name required.' };
+  if (!payload.licenseId) return { success: false, message: 'Driver License ID required.' };
+  if (!payload.email)     return { success: false, message: 'Email required para sa driver account.' };
+  if (!payload.password)  return { success: false, message: 'Password required para sa driver account.' };
+
+  var lock = LockService.getScriptLock();
   try {
-    const user = ops_getUserInfo_();
+    lock.waitLock(10000);
+  } catch(e) {
+    return { success: false, message: 'Server busy. Please try again in a moment.' };
+  }
+
+  try {
+    var user = ops_getUserInfo_();
     if (!ops_isAdmin_(user.role) && !ops_isEncoder_(user.role))
       return { success: false, message: 'Access denied.' };
-    if (!payload.name)      return { success: false, message: 'Full Name required.' };
-    if (!payload.licenseId) return { success: false, message: 'Driver License ID required.' };
-    if (!payload.email)     return { success: false, message: 'Email required para sa driver account.' };
-    if (!payload.password)  return { success: false, message: 'Password required para sa driver account.' };
 
-    const drivers = ops_getAllDrivers_();
+    var drivers = ops_getAllDrivers_();
     if (drivers.some(function(d) {
       return d.licenseId.toLowerCase() === payload.licenseId.trim().toLowerCase();
     })) return { success: false, message: 'License ID "' + payload.licenseId + '" already exists.' };
@@ -1302,13 +1343,19 @@ function ops_addDriver(payload) {
       id
     ]]);
 
+    SpreadsheetApp.flush();
     ops_audit_('OPS_ADD_DRIVER', { driverId: id, name: payload.name, email: payload.email, by: user.email });
     return {
       success  : true,
       message  : 'Driver ' + id + ' added. Login account created for ' + payload.email + '.',
       driverId : id
     };
-  } catch(e) { return { success: false, message: e.message }; }
+
+  } catch(e) {
+    return { success: false, message: e.message };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function ops_updateDriver(payload) {
