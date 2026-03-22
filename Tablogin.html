@@ -289,13 +289,23 @@ function lg_submit() {
     .withSuccessHandler(function(r) {
       lg_setLoading(false);
       if (r.success) {
-        // ✅ Save session
+        // Save session
         sessionStorage.setItem('ops_email', r.email || '');
         sessionStorage.setItem('ops_role',  r.role  || 'No Role');
 
+        // Ensure all tab panes are inactive before applying role UI
+        // Prevents any previous active pane from flashing during transition
+        document.querySelectorAll('.tab-pane').forEach(function(p) {
+          p.classList.remove('active');
+        });
+        document.querySelectorAll('.o-nav-item').forEach(function(n) {
+          n.classList.remove('active');
+        });
+
         var screen = document.getElementById('login-screen');
         screen.style.transition = 'opacity .4s ease';
-        screen.style.opacity = '0';
+        screen.style.opacity    = '0';
+
         setTimeout(function() {
           screen.style.display = 'none';
           document.getElementById('o-user-email').textContent  = r.email || '';
@@ -303,6 +313,7 @@ function lg_submit() {
           document.getElementById('o-role-badge').textContent  = r.role  || 'No Role';
           o_applyRoleUI(r.role || '');
         }, 400);
+
       } else {
         lg_showAlert(r.message || 'Incorrect email or password.');
         document.getElementById('lg-email').classList.add('error');

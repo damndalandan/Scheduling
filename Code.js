@@ -419,6 +419,67 @@ function ops_hashPassword_(plaintext) {
   }).join('');
 }
 
+function ops_loginUser(email, password) {
+  try {
+    var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('LoginUsers');
+    if (!sh) return { success: false, message: 'LoginUsers sheet not found. Please contact admin.' };
+
+    var lr = sh.getLastRow();
+    if (lr < 2) return { success: false, message: 'No users registered yet.' };
+
+    // Read 4 columns: email, password, role, driverId
+    var data       = sh.getRange(2, 1, lr - 1, 4).getValues();
+    var inputEmail = String(email    || '').trim().toLowerCase();
+    var inputPw    = String(password || '').trim();
+    var inputHash  = ops_hashPassword_(inputPw);
+
+    for (var i = 0; i < data.length; i++) {
+      var rowEmail = String(data[i][0] || '').trim().toLowerCase();
+      var rowPw    = String(data[i][1] || '').trim();
+      var rowRole  = String(data[i][2] || '').trim();
+      var rowDrvId = String(data[i][3] || '').trim();
+
+      if (rowEmail !== inputEmail) continue;
+
+      // Support both hashed passwords (64-char hex) and
+      // legacy plaintext passwords during migration window
+      var isHashed   = /^[0-9a-f]{64}$/.test(rowPw);
+      var passwordOk = isHashed
+        ? (rowPw === inputHash)  // compare hash to hash
+        : (rowPw === inputPw);   // legacy plaintext comparison
+
+      if (passwordOk) {
+        // If this was a plaintext match, upgrade it to a hash now
+        if (!isHashed) {
+          try {
+            sh.getRange(i + 2, 2).setValue(inputHash);
+            SpreadsheetApp.flush();
+            Logger.log('Password upgraded to hash for: ' + rowEmail);
+          } catch(upgradeErr) {
+            Logger.log('Hash upgrade failed (non-critical): ' + upgradeErr.message);
+          }
+        }
+
+        return {
+          success  : true,
+          email    : rowEmail,
+          role     : rowRole  || 'No Role',
+          driverId : rowDrvId || '',
+          message  : 'Login successful.'
+        };
+
+      } else {
+        return { success: false, message: 'Incorrect password. Please try again.' };
+      }
+    }
+
+    return { success: false, message: 'Email not found. Please check your email or contact admin.' };
+
+  } catch(e) {
+    return { success: false, message: 'Login error: ' + e.message };
+  }
+}
+
 // ============================================================
 //  LOGIN
 // ============================================================

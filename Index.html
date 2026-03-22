@@ -302,16 +302,29 @@ window.addEventListener('resize', function() {
 var initializedTabs = {};
 
 function switchTab(tabName) {
+  // Deactivate all panes and nav items
   document.querySelectorAll('.tab-pane').forEach(function(p) { p.classList.remove('active'); });
-  var target = document.getElementById('tab-' + tabName);
-  if (target) target.classList.add('active');
   document.querySelectorAll('.o-nav-item').forEach(function(n) { n.classList.remove('active'); });
+
+  // Activate target pane
+  var target = document.getElementById('tab-' + tabName);
+  if (!target) {
+    console.warn('switchTab: tab pane not found for "' + tabName + '"');
+    return;
+  }
+  target.classList.add('active');
+
+  // Activate nav item
   var navItem = document.querySelector('.o-nav-item[data-tab="' + tabName + '"]');
   if (navItem) navItem.classList.add('active');
+
+  // Close mobile sidebar
   if (o_isMobile) {
     document.getElementById('o-sidebar').classList.remove('mobile-open');
     document.getElementById('o-overlay').style.display = 'none';
   }
+
+  // Initialize tab if not yet done
   var fn = 'init_' + tabName.replace(/-/g, '_');
   if (!initializedTabs[tabName] && typeof window[fn] === 'function') {
     initializedTabs[tabName] = true;
@@ -421,25 +434,75 @@ function o_applyRoleUI(role) {
   }
 }
 
-// ✅ LOGOUT FUNCTION — clears session and returns to login screen
 function o_logout() {
   if (!confirm('Sign out ka ba?')) return;
 
-  // ✅ Clear session
+  // ── 1. Clear session storage ──
   sessionStorage.removeItem('ops_email');
   sessionStorage.removeItem('ops_role');
 
+  // ── 2. Reset all tab panes — remove active, clear inner content ──
+  document.querySelectorAll('.tab-pane').forEach(function(pane) {
+    pane.classList.remove('active');
+
+    // Clear rendered content inside each tab so stale data
+    // from the previous user is never briefly visible on next login
+    // Skip the login tab and the static shell elements
+    var skipIds = ['tab-dashboard','tab-vehicles','tab-drivers',
+                   'tab-renewals','tab-trips','tab-new-trip',
+                   'tab-approval','tab-completion','tab-reports',
+                   'tab-trip-types','tab-driver-dashboard'];
+    if (skipIds.indexOf(pane.id) !== -1) {
+      // Only clear the dynamic content containers, not the whole pane
+      // (preserves the static HTML structure like headers and forms)
+      var dynamicSelectors = [
+        'tbody',           // all table bodies
+        '[id$="-cards"]',  // mobile card containers
+        '[id$="-stats"]',  // stat card rows
+        '[id$="-recent"]', // recent trip lists
+        '[id$="-alerts"]', // alert lists
+        '[id$="-pagination"]', // pagination controls
+        '[id$="-calendar-body"]' // driver calendar
+      ];
+      dynamicSelectors.forEach(function(sel) {
+        pane.querySelectorAll(sel).forEach(function(el) {
+          el.innerHTML = '';
+        });
+      });
+    }
+  });
+
+  // ── 3. Reset initialized tabs tracker ──
+  initializedTabs = {};
+
+  // ── 4. Reset sidebar nav — clear active states ──
+  document.querySelectorAll('.o-nav-item').forEach(function(item) {
+    item.classList.remove('active');
+  });
+
+  // ── 5. Restore full sidebar visibility (undo driver-mode hiding) ──
   document.querySelectorAll('#o-sidebar .o-nav-item, #o-sidebar .o-nav-section, #o-sidebar .o-nav-divider')
     .forEach(function(el) { el.style.display = ''; });
+
+  // Re-hide the driver-only nav item
   var driverNav = document.querySelector('.o-nav-item[data-tab="driver-dashboard"]');
   if (driverNav) driverNav.style.display = 'none';
 
+  // ── 6. Reset navbar user info ──
   document.getElementById('o-user-email').textContent  = '';
   document.getElementById('o-user-avatar').textContent = 'U';
   document.getElementById('o-role-badge').textContent  = 'Loading\u2026';
 
-  initializedTabs = {};
+  // ── 7. Reset any open modals ──
+  document.querySelectorAll('.o-modal-overlay.open').forEach(function(modal) {
+    modal.classList.remove('open');
+  });
 
+  // ── 8. Close mobile sidebar if open ──
+  document.getElementById('o-sidebar').classList.remove('mobile-open');
+  document.getElementById('o-overlay').style.display = 'none';
+
+  // ── 9. Reset login form ──
   var emailEl = document.getElementById('lg-email');
   var pwEl    = document.getElementById('lg-password');
   if (emailEl) { emailEl.value = ''; emailEl.classList.remove('error'); }
@@ -447,11 +510,18 @@ function o_logout() {
   var alertEl = document.getElementById('lg-alert');
   if (alertEl) alertEl.classList.remove('show');
 
+  // ── 10. Show login screen with fade-in ──
   var screen = document.getElementById('login-screen');
   screen.style.opacity    = '0';
   screen.style.display    = 'flex';
   screen.style.transition = 'opacity .35s ease';
   setTimeout(function() { screen.style.opacity = '1'; }, 20);
+
+  // Focus email field after fade
+  setTimeout(function() {
+    var emailEl = document.getElementById('lg-email');
+    if (emailEl) emailEl.focus();
+  }, 400);
 }
 
 // Boot is handled by TabLogin.html — lg_submit() calls switchTab + init_dashboard after login.
