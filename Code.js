@@ -272,6 +272,36 @@ function ops_fmtDT_(val) {
   }
 }
 
+function ops_toISO_(val) {
+  if (val === null || val === undefined || val === '') return '';
+  try {
+    var d;
+
+    if (val instanceof Date) {
+      d = val;
+    } else if (typeof val === 'number') {
+      if (val <= 0) return '';
+      var epoch = new Date(1899, 11, 30).getTime();
+      d = new Date(epoch + Math.floor(val) * 86400000);
+    } else {
+      var s = String(val).trim();
+      if (!s || s === '0') return '';
+      d = new Date(s);
+    }
+
+    if (isNaN(d.getTime())) return '';
+    var y = d.getFullYear();
+    if (y < 1900 || y > 2200) return '';
+
+    // Return full ISO string so frontend can do reliable new Date() parsing
+    return d.toISOString();
+
+  } catch(e) {
+    Logger.log('ops_toISO_ error: ' + e.message + ' | val=' + val);
+    return '';
+  }
+}
+
 function ops_daysLeft_(dateStr) {
   if (dateStr === null || dateStr === undefined || dateStr === '') return null;
   try {
@@ -935,7 +965,8 @@ function ops_getAllTrips_() {
       return {
         rowIndex     : i + 2,
         tripId       : String(r[TRIP_COL.TRIP_ID]).trim(),
-        requestDate  : ops_fmtDT_(r[TRIP_COL.REQUEST_DATE]),
+        requestDate    : ops_fmtDT_(r[TRIP_COL.REQUEST_DATE]),
+        requestDateISO : ops_toISO_(r[TRIP_COL.REQUEST_DATE]),
         reqEmpId     : String(r[TRIP_COL.REQ_EMP_ID]   || '').trim(),
         reqName      : String(r[TRIP_COL.REQ_NAME]      || '').trim(),
         tripType     : String(r[TRIP_COL.TRIP_TYPE]     || '').trim(),
@@ -943,8 +974,10 @@ function ops_getAllTrips_() {
         relatedJo    : String(r[TRIP_COL.RELATED_JO]    || '').trim(),
         fromLoc      : String(r[TRIP_COL.FROM_LOC]      || '').trim(),
         toLoc        : String(r[TRIP_COL.TO_LOC]        || '').trim(),
-        startDate    : ops_fmtDT_(r[TRIP_COL.START_DATE]),
-        endDate      : ops_fmtDT_(r[TRIP_COL.END_DATE]),
+        startDate        : ops_fmtDT_(r[TRIP_COL.START_DATE]),
+        endDate          : ops_fmtDT_(r[TRIP_COL.END_DATE]),
+        startDateISO     : ops_toISO_(r[TRIP_COL.START_DATE]),
+        endDateISO       : ops_toISO_(r[TRIP_COL.END_DATE]),
         vehicleId    : String(r[TRIP_COL.VEHICLE_ID]    || '').trim(),
         plate        : String(r[TRIP_COL.PLATE]         || '').trim(),
         driverEmpId  : String(r[TRIP_COL.DRIVER_EMP_ID] || '').trim(),

@@ -280,9 +280,13 @@ function rpt_filterByPeriod(trips) {
   if (rpt_period === 'all') return trips;
   var range = rpt_getPeriodRange(rpt_period);
   return trips.filter(function(t) {
-    // Use requestDate or startDate for filtering
-    var rawDate = t.requestDate || t.startDate || '';
+    // Prefer ISO fields added in Bug #5 fix — guaranteed parseable
+    var rawDate = t.requestDateISO || t.startDateISO || '';
+
+    // Fallback to human-readable fields for older cached data
+    if (!rawDate) rawDate = t.requestDate || t.startDate || '';
     if (!rawDate) return false;
+
     var d = new Date(rawDate);
     if (isNaN(d.getTime())) return false;
     return d >= range.start && d <= range.end;
@@ -549,8 +553,8 @@ function rpt_renderSchedule(trips) {
 
   // Sort by start date descending (most recent first)
   var sorted = trips.slice().sort(function(a, b) {
-    var da = new Date(a.startDate || a.requestDate || 0);
-    var db = new Date(b.startDate || b.requestDate || 0);
+    var da = new Date(a.startDateISO || a.requestDateISO || a.startDate || a.requestDate || 0);
+    var db = new Date(b.startDateISO || b.requestDateISO || b.startDate || b.requestDate || 0);
     return db - da;
   });
 

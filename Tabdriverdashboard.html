@@ -391,10 +391,22 @@ function drv_renderCalendar() {
 // Helper: check if a trip covers a given date
 function drv_tripsOnDate(dateStr) {
   return drv_trips.filter(function(t) {
-    var start = (t.startDate || '').substring(0, 10);
-    var end   = (t.endDate   || '').substring(0, 10);
+    // Use ISO fields for reliable yyyy-mm-dd comparison
+    var start = (t.startDateISO || t.startDate || '').substring(0, 10);
+    var end   = (t.endDateISO   || t.endDate   || '').substring(0, 10);
+
+    // If still not yyyy-mm-dd, try to parse and reformat
+    if (start && !/^\d{4}-\d{2}-\d{2}$/.test(start)) {
+      var ds = new Date(start);
+      start  = isNaN(ds.getTime()) ? '' : ds.toISOString().substring(0, 10);
+    }
+    if (end && !/^\d{4}-\d{2}-\d{2}$/.test(end)) {
+      var de = new Date(end);
+      end    = isNaN(de.getTime()) ? '' : de.toISOString().substring(0, 10);
+    }
+
     if (!start) return false;
-    if (!end) end = start;
+    if (!end)   end = start;
     return dateStr >= start && dateStr <= end;
   });
 }
