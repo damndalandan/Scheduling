@@ -595,6 +595,7 @@ function getDashboardInitData() {
 
     return { success: true, user, stats, recent, alerts, settings };
   } catch(e) { return { success: false, message: e.message }; }
+  
 }
 
 function getTripsInitData() {
