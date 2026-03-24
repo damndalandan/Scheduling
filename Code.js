@@ -680,11 +680,12 @@ function getDriversInitData() {
 //  ✅ FIXED: Uses Driver_ID as the single source of truth.
 //  Triple fallback: Driver_ID → email → name (for legacy trips)
 // ============================================================
+
 function getDriverDashboardData(sessionEmail) {
   try {
     var email = String(sessionEmail || '').toLowerCase().trim();
     if (!email) return { success: false, message: 'Session expired. Please log in again.' };
-    var user = { email: email, role: 'driver' };
+    var user = { email: email, role: 'driver', abilities: [] };
 
     var driverId   = '';
     var driverName = '';
@@ -1181,11 +1182,11 @@ function ops_driverCompleteTrip(payload) {
   }
 
   try {
-    var user = ops_getUserInfo_();
-    var role = (user.role || '').toLowerCase();
+    var role = String(payload.sessionEmail ? 'driver' : '').toLowerCase();
+    var user = { email: String(payload.sessionEmail || '').toLowerCase().trim(), role: 'driver' };
 
-    if (role !== 'driver')
-      return { success: false, message: 'Driver access required. Ops staff should use the Trip Completion tab.' };
+    if (!user.email)
+      return { success: false, message: 'Session expired. Please log in again.' };
 
     var row = ops_getTripRow_(payload.tripId);
     if (!row) return { success: false, message: 'Trip not found.' };

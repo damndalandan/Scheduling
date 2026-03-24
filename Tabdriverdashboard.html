@@ -310,7 +310,7 @@ function drvd_loadData() {
       o_setReloading('drvd-reload-btn', false);
       o_toast('error', e.message);
     })
-    .getDriverDashboardData(sessionEmail);
+    .getDriverDashboardData(sessionStorage.getItem('ops_email') || '');
 }
 
 function drvd_renderStats() {
@@ -695,7 +695,8 @@ function drvd_submitComplete() {
       actualEnd   : actualEnd,
       startKm     : startKm,
       endKm       : endKm,
-      remarks     : remarks
+      remarks     : remark,
+      sessionEmail: sessionStorage.getItem('ops_email') || ''
     });
 }
 </script>
