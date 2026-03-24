@@ -285,6 +285,7 @@ function drvd_reload() {
 }
 
 function drvd_loadData() {
+  var sessionEmail = sessionStorage.getItem('ops_email') || '';
   google.script.run
     .withSuccessHandler(function(r) {
       o_setReloading('drvd-reload-btn', false);
@@ -309,7 +310,7 @@ function drvd_loadData() {
       o_setReloading('drvd-reload-btn', false);
       o_toast('error', e.message);
     })
-    .getDriverDashboardData();
+    .getDriverDashboardData(sessionEmail);
 }
 
 function drvd_renderStats() {

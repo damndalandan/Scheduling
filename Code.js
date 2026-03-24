@@ -680,10 +680,11 @@ function getDriversInitData() {
 //  ✅ FIXED: Uses Driver_ID as the single source of truth.
 //  Triple fallback: Driver_ID → email → name (for legacy trips)
 // ============================================================
-function getDriverDashboardData() {
+function getDriverDashboardData(sessionEmail) {
   try {
-    var user  = ops_getUserInfo_();
-    var email = user.email.toLowerCase().trim();
+    var email = String(sessionEmail || '').toLowerCase().trim();
+    if (!email) return { success: false, message: 'Session expired. Please log in again.' };
+    var user = { email: email, role: 'driver' };
 
     var driverId   = '';
     var driverName = '';
