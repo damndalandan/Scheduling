@@ -698,5 +698,7 @@ function drvd_submitComplete() {
       remarks     : remark,
       sessionEmail: sessionStorage.getItem('ops_email') || ''
     });
+
+    console.log('Submitting payload:', JSON.stringify(submitPayload)); 
 }
 </script>

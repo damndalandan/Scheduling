@@ -1182,7 +1182,6 @@ function ops_driverCompleteTrip(payload) {
   }
 
   try {
-    var role = String(payload.sessionEmail ? 'driver' : '').toLowerCase();
     var user = { email: String(payload.sessionEmail || '').toLowerCase().trim(), role: 'driver' };
 
     if (!user.email)
