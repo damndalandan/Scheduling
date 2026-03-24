@@ -182,7 +182,6 @@ function ops_sh_(name) {
 function ops_fmtDate_(val) {
   if (val === null || val === undefined || val === '') return '';
   try {
-    // Already a JS Date object (most common from getValues())
     if (val instanceof Date) {
       if (isNaN(val.getTime())) return '';
       var y1 = val.getFullYear();
@@ -191,13 +190,10 @@ function ops_fmtDate_(val) {
         + String(val.getMonth() + 1).padStart(2, '0') + '-'
         + String(val.getDate()).padStart(2, '0');
     }
-
-    // Numeric serial date from Google Sheets
-    // Google's epoch is December 30, 1899
     if (typeof val === 'number') {
       if (val <= 0) return '';
       var msPerDay  = 86400000;
-      var epoch     = new Date(1899, 11, 30).getTime(); // Dec 30, 1899
+      var epoch     = new Date(1899, 11, 30).getTime();
       var d         = new Date(epoch + Math.floor(val) * msPerDay);
       if (isNaN(d.getTime())) return '';
       var y2 = d.getFullYear();
@@ -206,20 +202,14 @@ function ops_fmtDate_(val) {
         + String(d.getMonth() + 1).padStart(2, '0') + '-'
         + String(d.getDate()).padStart(2, '0');
     }
-
-    // String value
     var s = String(val).trim();
     if (!s || s === '0') return '';
-
-    // Already in yyyy-mm-dd format
     if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
       var parts = s.split('-');
       var y3    = parseInt(parts[0]);
       if (y3 < 1900 || y3 > 2200) return '';
       return s;
     }
-
-    // Try parsing as a date string
     var parsed = new Date(s);
     if (isNaN(parsed.getTime())) return '';
     var y4 = parsed.getFullYear();
@@ -227,7 +217,6 @@ function ops_fmtDate_(val) {
     return y4 + '-'
       + String(parsed.getMonth() + 1).padStart(2, '0') + '-'
       + String(parsed.getDate()).padStart(2, '0');
-
   } catch(e) {
     Logger.log('ops_fmtDate_ error: ' + e.message + ' | val=' + val);
     return '';
@@ -239,44 +228,6 @@ function ops_fmtDT_(val) {
   try {
     var d;
     var mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-
-    // Already a JS Date object
-    if (val instanceof Date) {
-      d = val;
-    }
-    // Numeric serial date from Google Sheets (date-only, no time)
-    else if (typeof val === 'number') {
-      if (val <= 0) return '';
-      var epoch = new Date(1899, 11, 30).getTime(); // Dec 30, 1899
-      d = new Date(epoch + Math.floor(val) * 86400000);
-    }
-    // String — try direct parse
-    else {
-      var s = String(val).trim();
-      if (!s || s === '0') return '';
-      d = new Date(s);
-    }
-
-    if (isNaN(d.getTime())) return '';
-    var y = d.getFullYear();
-    if (y < 1900 || y > 2200) return '';
-
-    return mo[d.getMonth()] + ' ' + String(d.getDate()).padStart(2, '0')
-      + ', ' + y + ' '
-      + String(d.getHours()).padStart(2, '0') + ':'
-      + String(d.getMinutes()).padStart(2, '0');
-
-  } catch(e) {
-    Logger.log('ops_fmtDT_ error: ' + e.message + ' | val=' + val);
-    return '';
-  }
-}
-
-function ops_toISO_(val) {
-  if (val === null || val === undefined || val === '') return '';
-  try {
-    var d;
-
     if (val instanceof Date) {
       d = val;
     } else if (typeof val === 'number') {
@@ -288,14 +239,38 @@ function ops_toISO_(val) {
       if (!s || s === '0') return '';
       d = new Date(s);
     }
-
     if (isNaN(d.getTime())) return '';
     var y = d.getFullYear();
     if (y < 1900 || y > 2200) return '';
+    return mo[d.getMonth()] + ' ' + String(d.getDate()).padStart(2, '0')
+      + ', ' + y + ' '
+      + String(d.getHours()).padStart(2, '0') + ':'
+      + String(d.getMinutes()).padStart(2, '0');
+  } catch(e) {
+    Logger.log('ops_fmtDT_ error: ' + e.message + ' | val=' + val);
+    return '';
+  }
+}
 
-    // Return full ISO string so frontend can do reliable new Date() parsing
+function ops_toISO_(val) {
+  if (val === null || val === undefined || val === '') return '';
+  try {
+    var d;
+    if (val instanceof Date) {
+      d = val;
+    } else if (typeof val === 'number') {
+      if (val <= 0) return '';
+      var epoch = new Date(1899, 11, 30).getTime();
+      d = new Date(epoch + Math.floor(val) * 86400000);
+    } else {
+      var s = String(val).trim();
+      if (!s || s === '0') return '';
+      d = new Date(s);
+    }
+    if (isNaN(d.getTime())) return '';
+    var y = d.getFullYear();
+    if (y < 1900 || y > 2200) return '';
     return d.toISOString();
-
   } catch(e) {
     Logger.log('ops_toISO_ error: ' + e.message + ' | val=' + val);
     return '';
@@ -303,63 +278,17 @@ function ops_toISO_(val) {
 }
 
 function ops_now_() {
-  // Returns current datetime formatted in Philippine Standard Time (UTC+8)
-  // Safe regardless of spreadsheet-level timezone setting
-  var now       = new Date();
-  var pstOffset = 8 * 60; // PST is UTC+8, no DST
-  var utc       = now.getTime() + (now.getTimezoneOffset() * 60000);
-  return new Date(utc + (pstOffset * 60000));
+  return Utilities.formatDate(new Date(), 'Asia/Manila', "yyyy-MM-dd'T'HH:mm:ss");
 }
 
 function ops_daysLeft_(dateStr) {
-  if (dateStr === null || dateStr === undefined || dateStr === '') return null;
+  if (!dateStr) return null;
   try {
-    var expiry;
-
-    // Numeric serial date
-    if (typeof dateStr === 'number') {
-      if (dateStr <= 0) return null;
-      var epoch = new Date(1899, 11, 30).getTime();
-      expiry    = new Date(epoch + Math.floor(dateStr) * 86400000);
-    }
-    // JS Date object
-    else if (dateStr instanceof Date) {
-      expiry = dateStr;
-    }
-    // yyyy-mm-dd string
-    else {
-      var s = String(dateStr).trim();
-      if (!s || s === '0') return null;
-      var parts = s.split('-');
-      if (parts.length !== 3) return null;
-      expiry = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-    }
-
-    if (isNaN(expiry.getTime())) return null;
-    var today = new Date();
-    today.setHours(0, 0, 0, 0);
-    expiry.setHours(0, 0, 0, 0);
-    return Math.ceil((expiry - today) / 86400000);
-
-  } catch(e) {
-    Logger.log('ops_daysLeft_ error: ' + e.message + ' | val=' + dateStr);
-    return null;
-  }
-}
-
-// DEBUG HELPER — run this in GAS editor to check raw sheet values
-function ops_debugVehicles() {
-  var sh = ops_sh_(OPS_SHEETS.VEHICLES);
-  var lr = sh.getLastRow();
-  if (lr < 2) { Logger.log("No data"); return; }
-  var data = sh.getRange(2, 1, lr - 1, 13).getValues();
-  data.forEach(function(r) {
-    Logger.log(JSON.stringify({
-      id: r[0], plate: r[1],
-      insRaw: String(r[6]), insType: typeof r[6], insFmt: ops_fmtDate_(r[6]),
-      ltoRaw: String(r[8]), ltoType: typeof r[8], ltoFmt: ops_fmtDate_(r[8])
-    }));
-  });
+    var d    = new Date(dateStr);
+    var now  = new Date();
+    var diff = Math.round((d - now) / 86400000);
+    return isNaN(diff) ? null : diff;
+  } catch(e) { return null; }
 }
 
 // ============================================================
@@ -387,9 +316,9 @@ function ops_getUserInfo_() {
     if (lr >= 2) {
       const data = sh.getRange(2, 1, lr - 1, 3).getValues();
       for (let i = 0; i < data.length; i++) {
-        const role     = String(data[i][0] || '').trim();
-        const emails   = String(data[i][1] || '').toLowerCase().split(',').map(function(e) { return e.trim(); });
-        const abilities= String(data[i][2] || '').toLowerCase().split(',').map(function(a) { return a.trim(); });
+        const role      = String(data[i][0] || '').trim();
+        const emails    = String(data[i][1] || '').toLowerCase().split(',').map(function(e) { return e.trim(); });
+        const abilities = String(data[i][2] || '').toLowerCase().split(',').map(function(a) { return a.trim(); });
         if (emails.includes(email)) return { email, role, abilities };
       }
     }
@@ -406,9 +335,7 @@ function ops_isApprover_(r) { return r.toLowerCase().includes('approver') || ops
 function ops_isEncoder_(r)  { return r.toLowerCase().includes('encoder') || r.toLowerCase().includes('operator') || ops_isAdmin_(r); }
 
 function ops_hashPassword_(plaintext) {
-  // SHA-256 hash using Apps Script's built-in Utilities
-  // Returns a lowercase hex string
-  var bytes  = Utilities.computeDigest(
+  var bytes = Utilities.computeDigest(
     Utilities.DigestAlgorithm.SHA_256,
     String(plaintext),
     Utilities.Charset.UTF_8
@@ -441,15 +368,12 @@ function ops_loginUser(email, password) {
 
       if (rowEmail !== inputEmail) continue;
 
-      // Support both hashed passwords (64-char hex) and
-      // legacy plaintext passwords during migration window
       var isHashed   = /^[0-9a-f]{64}$/.test(rowPw);
       var passwordOk = isHashed
-        ? (rowPw === inputHash)  // compare hash to hash
-        : (rowPw === inputPw);   // legacy plaintext comparison
+        ? (rowPw === inputHash)
+        : (rowPw === inputPw);
 
       if (passwordOk) {
-        // If this was a plaintext match, upgrade it to a hash now
         if (!isHashed) {
           try {
             sh.getRange(i + 2, 2).setValue(inputHash);
@@ -459,7 +383,6 @@ function ops_loginUser(email, password) {
             Logger.log('Hash upgrade failed (non-critical): ' + upgradeErr.message);
           }
         }
-
         return {
           success  : true,
           email    : rowEmail,
@@ -467,23 +390,20 @@ function ops_loginUser(email, password) {
           driverId : rowDrvId || '',
           message  : 'Login successful.'
         };
-
       } else {
         return { success: false, message: 'Incorrect password. Please try again.' };
       }
     }
 
     return { success: false, message: 'Email not found. Please check your email or contact admin.' };
-
   } catch(e) {
     return { success: false, message: 'Login error: ' + e.message };
   }
 }
 
 // ============================================================
-//  LOGIN
+//  SESSION VERIFY
 // ============================================================
-
 function ops_verifySession(email) {
   try {
     var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('LoginUsers');
@@ -654,7 +574,6 @@ function ops_getEmployeeList_() {
 // ============================================================
 //  COMBINED INIT DATA
 // ============================================================
-
 function getDashboardInitData() {
   try {
     const user     = ops_getUserInfo_();
@@ -757,25 +676,22 @@ function getDriversInitData() {
 }
 
 // ============================================================
-//  REPLACE getDriverDashboardData() in your Code.js
-//  ROOT CAUSE FIX: No more index-based matching.
-//  Now scans LoginUsers email → finds driver name by email prefix
-//  Then matches trips by driver name string comparison.
+//  DRIVER DASHBOARD DATA
+//  ✅ FIXED: Uses Driver_ID as the single source of truth.
+//  Triple fallback: Driver_ID → email → name (for legacy trips)
 // ============================================================
-
 function getDriverDashboardData() {
   try {
     var user  = ops_getUserInfo_();
     var email = user.email.toLowerCase().trim();
 
-    // ── Step 1: Look up driverId directly from LoginUsers column 4 ──
     var driverId   = '';
     var driverName = '';
 
+    // ── Step 1: Look up Driver_ID from LoginUsers col 4 by email ──
     try {
       var ss      = SpreadsheetApp.getActiveSpreadsheet();
       var loginSh = ss.getSheetByName('LoginUsers');
-
       if (loginSh && loginSh.getLastRow() >= 2) {
         var loginData = loginSh.getRange(2, 1, loginSh.getLastRow() - 1, 4).getValues();
         for (var i = 0; i < loginData.length; i++) {
@@ -792,7 +708,7 @@ function getDriverDashboardData() {
       Logger.log('LoginUsers lookup error: ' + e.message);
     }
 
-    // ── Step 2: Get driver name from Drivers sheet using driverId ──
+    // ── Step 2: Get driver name from Drivers sheet using Driver_ID ──
     if (driverId) {
       try {
         var driverSh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Drivers');
@@ -812,26 +728,43 @@ function getDriverDashboardData() {
 
     Logger.log('Driver login: email=[' + email + '] driverId=[' + driverId + '] name=[' + driverName + ']');
 
-    // ── Step 3: Match trips by driverId stored in DRIVER_EMP_ID column ──
     var allTrips = ops_getAllTrips_();
     var myTrips  = [];
 
+    // ── Step 3a: PRIMARY — match by Driver_ID in DRIVER_EMP_ID column ──
+    // Works for all trips created after this fix is deployed.
     if (driverId) {
       myTrips = allTrips.filter(function(t) {
         return String(t.driverEmpId || '').trim() === driverId;
       });
+      Logger.log('Matched by driverId: ' + myTrips.length);
     }
 
-    // ── Fallback: match by driverName if driverId not yet stored on older trips ──
+    // ── Step 3b: FALLBACK — match by email in DRIVER_EMP_ID column ──
+    // Catches trips saved during the period when email was stored there instead.
+    if (myTrips.length === 0 && email) {
+      var emailMatches = allTrips.filter(function(t) {
+        return String(t.driverEmpId || '').trim().toLowerCase() === email;
+      });
+      if (emailMatches.length > 0) {
+        Logger.log('Matched by email fallback: ' + emailMatches.length);
+        myTrips = emailMatches;
+      }
+    }
+
+    // ── Step 3c: FALLBACK — match by driver name string ──
+    // Catches very old trips that only stored the name.
     if (myTrips.length === 0 && driverName) {
       var norm = function(s) { return String(s || '').toLowerCase().replace(/\s+/g, ' ').trim(); };
       var n    = norm(driverName);
-      myTrips  = allTrips.filter(function(t) {
-        return norm(t.driverName) === n;
-      });
+      var nameMatches = allTrips.filter(function(t) { return norm(t.driverName) === n; });
+      if (nameMatches.length > 0) {
+        Logger.log('Matched by name fallback: ' + nameMatches.length);
+        myTrips = nameMatches;
+      }
     }
 
-    Logger.log('Matched trips: ' + myTrips.length);
+    Logger.log('Total matched trips: ' + myTrips.length);
 
     return {
       success    : true,
@@ -843,105 +776,8 @@ function getDriverDashboardData() {
     };
 
   } catch(e) {
+    Logger.log('getDriverDashboardData error: ' + e.message);
     return { success: false, message: e.message };
-  }
-}
-
-// ============================================================
-//  DRIVER COMPLETE TRIP
-// ============================================================
-function ops_driverCompleteTrip(payload) {
-  // Validate before acquiring lock
-  if (!payload.tripId)      return { success: false, message: 'Trip ID required.' };
-  if (!payload.actualStart) return { success: false, message: 'Actual Start required.' };
-  if (!payload.actualEnd)   return { success: false, message: 'Actual End required.' };
-
-  var startKm = parseFloat(payload.startKm) || 0;
-  var endKm   = parseFloat(payload.endKm)   || 0;
-  if (isNaN(startKm) || isNaN(endKm))
-    return { success: false, message: 'Mileage must be a number.' };
-  if (endKm < startKm)
-    return { success: false, message: 'End mileage cannot be less than start mileage.' };
-
-  var lock = LockService.getScriptLock();
-  try {
-    lock.waitLock(10000);
-  } catch(e) {
-    return { success: false, message: 'Server busy. Please try again in a moment.' };
-  }
-
-  try {
-    var user = ops_getUserInfo_();
-    var role = (user.role || '').toLowerCase();
-
-    // Drivers only — encoders/admins must use ops_completeTrip()
-    if (role !== 'driver')
-      return { success: false, message: 'Driver access required. Ops staff should use the Trip Completion tab.' };
-
-    var row = ops_getTripRow_(payload.tripId);
-    if (!row) return { success: false, message: 'Trip not found.' };
-
-    var currentStatus = row.data[TRIP_COL.STATUS];
-    if (currentStatus === TRIP_STATUS.COMPLETED)
-      return { success: false, message: 'Trip ' + payload.tripId + ' is already completed.' };
-    if (currentStatus !== TRIP_STATUS.APPROVED)
-      return { success: false, message: 'Trip must be Approved before completing. Current status: ' + currentStatus };
-
-    // Verify this trip actually belongs to this driver
-    var tripDriverEmpId = String(row.data[TRIP_COL.DRIVER_EMP_ID] || '').trim();
-    var tripDriverName  = String(row.data[TRIP_COL.DRIVER_NAME]   || '').trim().toLowerCase();
-
-    // Get the driverId for this logged-in driver from LoginUsers
-    var ss         = SpreadsheetApp.getActiveSpreadsheet();
-    var loginSh    = ss.getSheetByName('LoginUsers');
-    var myDriverId = '';
-    if (loginSh && loginSh.getLastRow() >= 2) {
-      var loginData = loginSh.getRange(2, 1, loginSh.getLastRow() - 1, 4).getValues();
-      for (var i = 0; i < loginData.length; i++) {
-        if (String(loginData[i][0] || '').trim().toLowerCase() === user.email) {
-          myDriverId = String(loginData[i][3] || '').trim();
-          break;
-        }
-      }
-    }
-
-    // Block if trip is assigned to a different driver
-    var ownsTrip = (myDriverId && tripDriverEmpId === myDriverId)
-                || (!myDriverId && tripDriverName === user.email.split('@')[0].toLowerCase());
-    if (!ownsTrip)
-      return { success: false, message: 'Access denied. This trip is not assigned to you.' };
-
-    var distance = endKm - startKm;
-    var sh       = ops_sh_(OPS_SHEETS.TRIPS);
-    var now = ops_now_();
-
-    sh.getRange(row.idx, TRIP_COL.STATUS       + 1).setValue(TRIP_STATUS.COMPLETED);
-    sh.getRange(row.idx, TRIP_COL.ACTUAL_START + 1).setValue(payload.actualStart);
-    sh.getRange(row.idx, TRIP_COL.ACTUAL_END   + 1).setValue(payload.actualEnd);
-    sh.getRange(row.idx, TRIP_COL.START_KM     + 1).setValue(startKm);
-    sh.getRange(row.idx, TRIP_COL.END_KM       + 1).setValue(endKm);
-    sh.getRange(row.idx, TRIP_COL.DISTANCE     + 1).setValue(distance);
-    sh.getRange(row.idx, TRIP_COL.REMARKS      + 1).setValue(payload.remarks || '');
-    sh.getRange(row.idx, TRIP_COL.UPDATED_AT   + 1).setValue(now);
-    sh.getRange(row.idx, TRIP_COL.UPDATED_BY   + 1).setValue(user.email);
-
-    SpreadsheetApp.flush();
-    ops_audit_('DRIVER_COMPLETE_TRIP', {
-      tripId   : payload.tripId,
-      distance : distance,
-      by       : user.email,
-      driverId : myDriverId,
-      via      : 'driver'
-    });
-    return {
-      success : true,
-      message : 'Trip ' + payload.tripId + ' completed! Distance: ' + distance + ' km.'
-    };
-
-  } catch(e) {
-    return { success: false, message: e.message };
-  } finally {
-    lock.releaseLock();
   }
 }
 
@@ -979,9 +815,7 @@ function ops_addVehicle(payload) {
     return { success: false, message: 'Plate Number and Vehicle Type are required.' };
 
   var lock = LockService.getScriptLock();
-  try {
-    lock.waitLock(10000);
-  } catch(e) {
+  try { lock.waitLock(10000); } catch(e) {
     return { success: false, message: 'Server busy. Please try again in a moment.' };
   }
 
@@ -1097,45 +931,44 @@ function ops_getAllTrips_() {
     .filter(function(r) { return r[TRIP_COL.TRIP_ID] && String(r[TRIP_COL.TRIP_ID]).trim(); })
     .map(function(r, i) {
       return {
-        rowIndex     : i + 2,
-        tripId       : String(r[TRIP_COL.TRIP_ID]).trim(),
+        rowIndex       : i + 2,
+        tripId         : String(r[TRIP_COL.TRIP_ID]).trim(),
         requestDate    : ops_fmtDT_(r[TRIP_COL.REQUEST_DATE]),
         requestDateISO : ops_toISO_(r[TRIP_COL.REQUEST_DATE]),
-        reqEmpId     : String(r[TRIP_COL.REQ_EMP_ID]   || '').trim(),
-        reqName      : String(r[TRIP_COL.REQ_NAME]      || '').trim(),
-        tripType     : String(r[TRIP_COL.TRIP_TYPE]     || '').trim(),
-        purpose      : String(r[TRIP_COL.PURPOSE]       || '').trim(),
-        relatedJo    : String(r[TRIP_COL.RELATED_JO]    || '').trim(),
-        fromLoc      : String(r[TRIP_COL.FROM_LOC]      || '').trim(),
-        toLoc        : String(r[TRIP_COL.TO_LOC]        || '').trim(),
-        startDate        : ops_fmtDT_(r[TRIP_COL.START_DATE]),
-        endDate          : ops_fmtDT_(r[TRIP_COL.END_DATE]),
-        startDateISO     : ops_toISO_(r[TRIP_COL.START_DATE]),
-        endDateISO       : ops_toISO_(r[TRIP_COL.END_DATE]),
-        vehicleId    : String(r[TRIP_COL.VEHICLE_ID]    || '').trim(),
-        plate        : String(r[TRIP_COL.PLATE]         || '').trim(),
-        driverEmpId  : String(r[TRIP_COL.DRIVER_EMP_ID] || '').trim(),
-        driverName   : String(r[TRIP_COL.DRIVER_NAME]   || '').trim(),
-        status       : String(r[TRIP_COL.STATUS]        || TRIP_STATUS.DRAFT).trim(),
-        approvedBy   : String(r[TRIP_COL.APPROVED_BY]   || '').trim(),
-        approvalDate : ops_fmtDT_(r[TRIP_COL.APPROVAL_DATE]),
-        rejectReason : String(r[TRIP_COL.REJECT_REASON] || '').trim(),
-        cancelReason : String(r[TRIP_COL.CANCEL_REASON] || '').trim(),
-        actualStart  : ops_fmtDT_(r[TRIP_COL.ACTUAL_START]),
-        actualEnd    : ops_fmtDT_(r[TRIP_COL.ACTUAL_END]),
-        startKm      : parseFloat(r[TRIP_COL.START_KM])  || 0,
-        endKm        : parseFloat(r[TRIP_COL.END_KM])    || 0,
-        distance     : parseFloat(r[TRIP_COL.DISTANCE])  || 0,
-        proofLink    : String(r[TRIP_COL.PROOF_LINK]    || '').trim(),
-        remarks      : String(r[TRIP_COL.REMARKS]       || '').trim(),
-        updatedAt    : ops_fmtDT_(r[TRIP_COL.UPDATED_AT]),
-        updatedBy    : String(r[TRIP_COL.UPDATED_BY]    || '').trim()
+        reqEmpId       : String(r[TRIP_COL.REQ_EMP_ID]   || '').trim(),
+        reqName        : String(r[TRIP_COL.REQ_NAME]      || '').trim(),
+        tripType       : String(r[TRIP_COL.TRIP_TYPE]     || '').trim(),
+        purpose        : String(r[TRIP_COL.PURPOSE]       || '').trim(),
+        relatedJo      : String(r[TRIP_COL.RELATED_JO]    || '').trim(),
+        fromLoc        : String(r[TRIP_COL.FROM_LOC]      || '').trim(),
+        toLoc          : String(r[TRIP_COL.TO_LOC]        || '').trim(),
+        startDate      : ops_fmtDT_(r[TRIP_COL.START_DATE]),
+        endDate        : ops_fmtDT_(r[TRIP_COL.END_DATE]),
+        startDateISO   : ops_toISO_(r[TRIP_COL.START_DATE]),
+        endDateISO     : ops_toISO_(r[TRIP_COL.END_DATE]),
+        vehicleId      : String(r[TRIP_COL.VEHICLE_ID]    || '').trim(),
+        plate          : String(r[TRIP_COL.PLATE]         || '').trim(),
+        driverEmpId    : String(r[TRIP_COL.DRIVER_EMP_ID] || '').trim(),
+        driverName     : String(r[TRIP_COL.DRIVER_NAME]   || '').trim(),
+        status         : String(r[TRIP_COL.STATUS]        || TRIP_STATUS.DRAFT).trim(),
+        approvedBy     : String(r[TRIP_COL.APPROVED_BY]   || '').trim(),
+        approvalDate   : ops_fmtDT_(r[TRIP_COL.APPROVAL_DATE]),
+        rejectReason   : String(r[TRIP_COL.REJECT_REASON] || '').trim(),
+        cancelReason   : String(r[TRIP_COL.CANCEL_REASON] || '').trim(),
+        actualStart    : ops_fmtDT_(r[TRIP_COL.ACTUAL_START]),
+        actualEnd      : ops_fmtDT_(r[TRIP_COL.ACTUAL_END]),
+        startKm        : parseFloat(r[TRIP_COL.START_KM])  || 0,
+        endKm          : parseFloat(r[TRIP_COL.END_KM])    || 0,
+        distance       : parseFloat(r[TRIP_COL.DISTANCE])  || 0,
+        proofLink      : String(r[TRIP_COL.PROOF_LINK]    || '').trim(),
+        remarks        : String(r[TRIP_COL.REMARKS]       || '').trim(),
+        updatedAt      : ops_fmtDT_(r[TRIP_COL.UPDATED_AT]),
+        updatedBy      : String(r[TRIP_COL.UPDATED_BY]    || '').trim()
       };
     });
 }
 
 function ops_saveTrip(payload) {
-  // Validate before acquiring lock — fail fast
   if (!payload.reqName)   return { success: false, message: 'Requestor Name required.' };
   if (!payload.tripType)  return { success: false, message: 'Trip Type required.' };
   if (!payload.purpose)   return { success: false, message: 'Purpose required.' };
@@ -1150,10 +983,7 @@ function ops_saveTrip(payload) {
   }
 
   var lock = LockService.getScriptLock();
-  try {
-    // Wait up to 10 seconds for the lock — rejects if another save is mid-flight
-    lock.waitLock(10000);
-  } catch(e) {
+  try { lock.waitLock(10000); } catch(e) {
     return { success: false, message: 'Server busy. Please try again in a moment.' };
   }
 
@@ -1162,7 +992,7 @@ function ops_saveTrip(payload) {
     var trips = ops_getAllTrips_();
     var sh    = ops_sh_(OPS_SHEETS.TRIPS);
     var id    = ops_genId_('T', trips.map(function(t) { return [t.tripId]; }), 0);
-    var now = ops_now_();
+    var now   = ops_now_();
 
     sh.getRange(sh.getLastRow() + 1, 1, 1, 29).setValues([[
       id, now,
@@ -1186,9 +1016,7 @@ function ops_saveTrip(payload) {
       now, user.email
     ]]);
 
-    // Flush immediately so the lock is held until the write is committed
     SpreadsheetApp.flush();
-
     ops_audit_('OPS_SAVE_TRIP', { tripId: id, status: payload.status, by: user.email });
     return { success: true, message: 'Trip ' + id + ' saved as ' + payload.status + '.', tripId: id };
 
@@ -1274,7 +1102,6 @@ function ops_cancelTrip(tripId, reason) {
 }
 
 function ops_completeTrip(payload) {
-  // Validate before acquiring lock
   if (!payload.tripId)      return { success: false, message: 'Trip ID required.' };
   if (!payload.actualStart) return { success: false, message: 'Actual Start required.' };
   if (!payload.actualEnd)   return { success: false, message: 'Actual End required.' };
@@ -1287,16 +1114,12 @@ function ops_completeTrip(payload) {
     return { success: false, message: 'End mileage cannot be less than start mileage.' };
 
   var lock = LockService.getScriptLock();
-  try {
-    lock.waitLock(10000);
-  } catch(e) {
+  try { lock.waitLock(10000); } catch(e) {
     return { success: false, message: 'Server busy. Please try again in a moment.' };
   }
 
   try {
     var user = ops_getUserInfo_();
-
-    // Encoders and admins only — drivers must use ops_driverCompleteTrip()
     if (!ops_isEncoder_(user.role))
       return { success: false, message: 'Encoder access required.' };
 
@@ -1311,7 +1134,7 @@ function ops_completeTrip(payload) {
 
     var distance = endKm - startKm;
     var sh       = ops_sh_(OPS_SHEETS.TRIPS);
-    var now = ops_now_();
+    var now      = ops_now_();
 
     sh.getRange(row.idx, TRIP_COL.STATUS       + 1).setValue(TRIP_STATUS.COMPLETED);
     sh.getRange(row.idx, TRIP_COL.ACTUAL_START + 1).setValue(payload.actualStart);
@@ -1325,16 +1148,115 @@ function ops_completeTrip(payload) {
     sh.getRange(row.idx, TRIP_COL.UPDATED_BY   + 1).setValue(user.email);
 
     SpreadsheetApp.flush();
-    ops_audit_('OPS_COMPLETE_TRIP', {
-      tripId   : payload.tripId,
-      distance : distance,
-      by       : user.email,
-      via      : 'ops'
-    });
-    return {
-      success : true,
-      message : 'Trip ' + payload.tripId + ' marked Completed. Distance: ' + distance + ' km.'
-    };
+    ops_audit_('OPS_COMPLETE_TRIP', { tripId: payload.tripId, distance, by: user.email, via: 'ops' });
+    return { success: true, message: 'Trip ' + payload.tripId + ' marked Completed. Distance: ' + distance + ' km.' };
+
+  } catch(e) {
+    return { success: false, message: e.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ============================================================
+//  DRIVER COMPLETE TRIP
+//  ✅ FIXED: Triple-fallback ownership check matches dashboard
+// ============================================================
+function ops_driverCompleteTrip(payload) {
+  if (!payload.tripId)      return { success: false, message: 'Trip ID required.' };
+  if (!payload.actualStart) return { success: false, message: 'Actual Start required.' };
+  if (!payload.actualEnd)   return { success: false, message: 'Actual End required.' };
+
+  var startKm = parseFloat(payload.startKm) || 0;
+  var endKm   = parseFloat(payload.endKm)   || 0;
+  if (isNaN(startKm) || isNaN(endKm))
+    return { success: false, message: 'Mileage must be a number.' };
+  if (endKm < startKm)
+    return { success: false, message: 'End mileage cannot be less than start mileage.' };
+
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(10000); } catch(e) {
+    return { success: false, message: 'Server busy. Please try again in a moment.' };
+  }
+
+  try {
+    var user = ops_getUserInfo_();
+    var role = (user.role || '').toLowerCase();
+
+    if (role !== 'driver')
+      return { success: false, message: 'Driver access required. Ops staff should use the Trip Completion tab.' };
+
+    var row = ops_getTripRow_(payload.tripId);
+    if (!row) return { success: false, message: 'Trip not found.' };
+
+    var currentStatus = row.data[TRIP_COL.STATUS];
+    if (currentStatus === TRIP_STATUS.COMPLETED)
+      return { success: false, message: 'Trip ' + payload.tripId + ' is already completed.' };
+    if (currentStatus !== TRIP_STATUS.APPROVED)
+      return { success: false, message: 'Trip must be Approved before completing. Current status: ' + currentStatus };
+
+    // ── Resolve this driver's Driver_ID and name from LoginUsers + Drivers ──
+    var myEmail    = user.email.toLowerCase().trim();
+    var myDriverId = '';
+    var myDriverName = '';
+
+    var ss      = SpreadsheetApp.getActiveSpreadsheet();
+    var loginSh = ss.getSheetByName('LoginUsers');
+    if (loginSh && loginSh.getLastRow() >= 2) {
+      var loginData = loginSh.getRange(2, 1, loginSh.getLastRow() - 1, 4).getValues();
+      for (var i = 0; i < loginData.length; i++) {
+        if (String(loginData[i][0] || '').trim().toLowerCase() === myEmail) {
+          myDriverId = String(loginData[i][3] || '').trim();
+          break;
+        }
+      }
+    }
+
+    if (myDriverId) {
+      var driverSh = ss.getSheetByName('Drivers');
+      if (driverSh && driverSh.getLastRow() >= 2) {
+        var driverData = driverSh.getRange(2, 1, driverSh.getLastRow() - 1, 2).getValues();
+        for (var k = 0; k < driverData.length; k++) {
+          if (String(driverData[k][0] || '').trim() === myDriverId) {
+            myDriverName = String(driverData[k][1] || '').trim();
+            break;
+          }
+        }
+      }
+    }
+
+    var tripDriverEmpId = String(row.data[TRIP_COL.DRIVER_EMP_ID] || '').trim();
+    var tripDriverName  = String(row.data[TRIP_COL.DRIVER_NAME]   || '').trim();
+    var norm = function(s) { return String(s || '').toLowerCase().replace(/\s+/g, ' ').trim(); };
+
+    // Triple-fallback ownership check (mirrors getDriverDashboardData)
+    var ownsTrip =
+      (myDriverId   && tripDriverEmpId === myDriverId) ||
+      (myEmail      && norm(tripDriverEmpId) === myEmail) ||
+      (myDriverName && norm(tripDriverName) === norm(myDriverName));
+
+    if (!ownsTrip) {
+      Logger.log('Ownership failed: myDriverId=[' + myDriverId + '] tripEmpId=[' + tripDriverEmpId + '] myEmail=[' + myEmail + ']');
+      return { success: false, message: 'Access denied. This trip is not assigned to you.' };
+    }
+
+    var distance = endKm - startKm;
+    var sh       = ops_sh_(OPS_SHEETS.TRIPS);
+    var now      = ops_now_();
+
+    sh.getRange(row.idx, TRIP_COL.STATUS       + 1).setValue(TRIP_STATUS.COMPLETED);
+    sh.getRange(row.idx, TRIP_COL.ACTUAL_START + 1).setValue(payload.actualStart);
+    sh.getRange(row.idx, TRIP_COL.ACTUAL_END   + 1).setValue(payload.actualEnd);
+    sh.getRange(row.idx, TRIP_COL.START_KM     + 1).setValue(startKm);
+    sh.getRange(row.idx, TRIP_COL.END_KM       + 1).setValue(endKm);
+    sh.getRange(row.idx, TRIP_COL.DISTANCE     + 1).setValue(distance);
+    sh.getRange(row.idx, TRIP_COL.REMARKS      + 1).setValue(payload.remarks || '');
+    sh.getRange(row.idx, TRIP_COL.UPDATED_AT   + 1).setValue(now);
+    sh.getRange(row.idx, TRIP_COL.UPDATED_BY   + 1).setValue(user.email);
+
+    SpreadsheetApp.flush();
+    ops_audit_('DRIVER_COMPLETE_TRIP', { tripId: payload.tripId, distance, by: user.email, driverId: myDriverId, via: 'driver' });
+    return { success: true, message: 'Trip ' + payload.tripId + ' completed! Distance: ' + distance + ' km.' };
 
   } catch(e) {
     return { success: false, message: e.message };
@@ -1481,16 +1403,13 @@ function ops_getAllDrivers_() {
 }
 
 function ops_addDriver(payload) {
-  // Validate before acquiring lock
   if (!payload.name)      return { success: false, message: 'Full Name required.' };
   if (!payload.licenseId) return { success: false, message: 'Driver License ID required.' };
   if (!payload.email)     return { success: false, message: 'Email required para sa driver account.' };
   if (!payload.password)  return { success: false, message: 'Password required para sa driver account.' };
 
   var lock = LockService.getScriptLock();
-  try {
-    lock.waitLock(10000);
-  } catch(e) {
+  try { lock.waitLock(10000); } catch(e) {
     return { success: false, message: 'Server busy. Please try again in a moment.' };
   }
 
@@ -1507,8 +1426,8 @@ function ops_addDriver(payload) {
     var loginSh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('LoginUsers');
     if (!loginSh) {
       loginSh = SpreadsheetApp.getActiveSpreadsheet().insertSheet('LoginUsers');
-      loginSh.getRange(1, 1, 1, 3).setValues([['Email', 'Password', 'Role']]);
-      loginSh.getRange(1, 1, 1, 3).setFontWeight('bold').setBackground('#f8fafc');
+      loginSh.getRange(1, 1, 1, 4).setValues([['Email', 'Password', 'Role', 'Driver_ID']]);
+      loginSh.getRange(1, 1, 1, 4).setFontWeight('bold').setBackground('#f8fafc');
       loginSh.setFrozenRows(1);
     }
 
@@ -1652,9 +1571,7 @@ function ops_getTripTypes_() {
 function getTripTypesInitData() {
   try {
     const user  = ops_getUserInfo_();
-    const types = ops_getTripTypes_().map(function(r) {
-      return { row: r.row, value: r.value };
-    });
+    const types = ops_getTripTypes_().map(function(r) { return { row: r.row, value: r.value }; });
     return { success: true, user, types };
   } catch(e) { return { success: false, message: e.message }; }
 }
@@ -1687,23 +1604,18 @@ function ops_updateTripType(row, newValue) {
     if (!newValue) return { success: false, message: 'Value required.' };
     row = parseInt(row);
     if (!row || row < 2) return { success: false, message: 'Invalid row.' };
-
-    const existing = ops_getTripTypes_().filter(function(r) { return r.row !== row; });
-    if (existing.some(function(r) { return r.value.toLowerCase() === newValue.toLowerCase(); }))
-      return { success: false, message: '"' + newValue + '" already exists.' };
-
     const sh = ops_sh_(OPS_SHEETS.SETTINGS);
     sh.getRange(row, 2).setValue(newValue);
     ops_audit_('UPDATE_TRIP_TYPE', { row, newValue, by: user.email });
-    return { success: true, message: 'Trip Type updated to "' + newValue + '".' };
+    return { success: true, message: 'Trip Type updated.' };
   } catch(e) { return { success: false, message: e.message }; }
 }
 
 function ops_deleteTripType(row) {
   try {
     const user = ops_getUserInfo_();
-    if (!ops_isAdmin_(user.role))
-      return { success: false, message: 'Admin access required to delete Trip Types.' };
+    if (!ops_isAdmin_(user.role) && !ops_isEncoder_(user.role))
+      return { success: false, message: 'Access denied.' };
     row = parseInt(row);
     if (!row || row < 2) return { success: false, message: 'Invalid row.' };
 
@@ -1717,72 +1629,100 @@ function ops_deleteTripType(row) {
   } catch(e) { return { success: false, message: e.message }; }
 }
 
-function seedTripTypes() {
-  var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Settings');
-  var types = [
-    'Owner Errand',
-    'Supplier Delivery - Ormoc',
-    'Supplier Delivery - Outside Ormoc',
-    'Signage Installation',
-    'Other'
-  ];
-  types.forEach(function(t) { sh.appendRow(['trip_type', t]); });
+// ============================================================
+//  ONE-TIME MIGRATION — run once from Apps Script Editor
+//  Fixes any existing trips where email was stored in DRIVER_EMP_ID
+// ============================================================
+function ops_fixExistingTripDriverIds() {
+  var ss      = SpreadsheetApp.getActiveSpreadsheet();
+  var tripSh  = ss.getSheetByName('Trips');
+  var loginSh = ss.getSheetByName('LoginUsers');
+
+  if (!tripSh || !loginSh) { Logger.log('ERROR: Trips or LoginUsers sheet not found.'); return; }
+
+  // Build email → driverId map
+  var emailToId = {};
+  if (loginSh.getLastRow() >= 2) {
+    loginSh.getRange(2, 1, loginSh.getLastRow() - 1, 4).getValues().forEach(function(r) {
+      var email    = String(r[0] || '').trim().toLowerCase();
+      var role     = String(r[2] || '').trim().toLowerCase();
+      var driverId = String(r[3] || '').trim();
+      if (role === 'driver' && email && driverId) emailToId[email] = driverId;
+    });
+  }
+  Logger.log('Email→ID map: ' + JSON.stringify(emailToId));
+
+  if (tripSh.getLastRow() < 2) { Logger.log('No trips found.'); return; }
+
+  var tripData = tripSh.getRange(2, 1, tripSh.getLastRow() - 1, 15).getValues();
+  var fixed = 0, skipped = 0;
+
+  tripData.forEach(function(row, i) {
+    var currentEmpId = String(row[13] || '').trim(); // DRIVER_EMP_ID = col 14 (index 13)
+    if (currentEmpId.includes('@')) {
+      var mappedId = emailToId[currentEmpId.toLowerCase()];
+      if (mappedId) {
+        tripSh.getRange(i + 2, 14).setValue(mappedId);
+        Logger.log('Fixed row ' + (i + 2) + ': ' + currentEmpId + ' → ' + mappedId);
+        fixed++;
+      } else {
+        Logger.log('WARNING row ' + (i + 2) + ': "' + currentEmpId + '" not in LoginUsers — skipped.');
+        skipped++;
+      }
+    } else {
+      skipped++;
+    }
+  });
+
+  SpreadsheetApp.flush();
+  Logger.log('Done. Fixed: ' + fixed + ', Skipped/OK: ' + skipped);
+}
+
+// ============================================================
+//  UTILITY — fix LoginUsers header if missing col 4
+// ============================================================
+function ops_fixLoginUsersHeader() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName('LoginUsers');
+  if (!sh) { Logger.log('LoginUsers not found.'); return; }
+  sh.getRange(1, 1, 1, 4).setValues([['Email', 'Password', 'Role', 'Driver_ID']]);
+  sh.getRange(1, 1, 1, 4).setFontWeight('bold').setBackground('#f8fafc');
+  sh.setFrozenRows(1);
+  Logger.log('LoginUsers header fixed.');
 }
 
 function ops_fixSpreadsheetTimezone() {
-  // Run this once from the Apps Script editor to update
-  // the spreadsheet's own timezone setting to Philippine Standard Time
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   ss.setSpreadsheetTimeZone('Asia/Manila');
   Logger.log('Spreadsheet timezone updated to: ' + ss.getSpreadsheetTimeZone());
 }
 
 function ops_migratePasswordsToHash() {
-  // ONE-TIME migration — run from the Apps Script editor, never from the web app
-  // Converts all plaintext passwords in LoginUsers to SHA-256 hashes
   var ss  = SpreadsheetApp.getActiveSpreadsheet();
   var sh  = ss.getSheetByName('LoginUsers');
   if (!sh) { Logger.log('LoginUsers sheet not found.'); return; }
-
   var lr = sh.getLastRow();
   if (lr < 2) { Logger.log('No users to migrate.'); return; }
-
-  var data      = sh.getRange(2, 1, lr - 1, 2).getValues();
-  var migrated  = 0;
-  var skipped   = 0;
-
+  var data     = sh.getRange(2, 1, lr - 1, 2).getValues();
+  var migrated = 0, skipped = 0;
   for (var i = 0; i < data.length; i++) {
     var rowPw = String(data[i][1] || '').trim();
-
-    // Skip if already hashed (64-char lowercase hex)
-    if (/^[0-9a-f]{64}$/.test(rowPw)) {
-      skipped++;
-      continue;
-    }
-
-    // Hash the plaintext password and write it back
-    var hashed = ops_hashPassword_(rowPw);
-    sh.getRange(i + 2, 2).setValue(hashed);
+    if (/^[0-9a-f]{64}$/.test(rowPw)) { skipped++; continue; }
+    sh.getRange(i + 2, 2).setValue(ops_hashPassword_(rowPw));
     migrated++;
   }
-
   SpreadsheetApp.flush();
   Logger.log('Migration complete. Migrated: ' + migrated + ', Already hashed: ' + skipped);
 }
 
 function ops_resetPassword(targetEmail, newPassword) {
-  // Run from the Apps Script editor only — never exposed to the web app
-  // Usage: ops_resetPassword('user@email.com', 'newpassword123')
   var ss  = SpreadsheetApp.getActiveSpreadsheet();
   var sh  = ss.getSheetByName('LoginUsers');
   if (!sh) { Logger.log('LoginUsers sheet not found.'); return; }
-
   var lr   = sh.getLastRow();
   if (lr < 2) { Logger.log('No users found.'); return; }
-
   var data  = sh.getRange(2, 1, lr - 1, 1).getValues();
   var email = String(targetEmail || '').trim().toLowerCase();
-
   for (var i = 0; i < data.length; i++) {
     if (String(data[i][0] || '').trim().toLowerCase() === email) {
       sh.getRange(i + 2, 2).setValue(ops_hashPassword_(newPassword));
@@ -1791,16 +1731,11 @@ function ops_resetPassword(targetEmail, newPassword) {
       return;
     }
   }
-
   Logger.log('Email not found: ' + email);
 }
 
-function ops_fixLoginUsersHeader() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sh = ss.getSheetByName('LoginUsers');
-  if (!sh) { Logger.log('LoginUsers not found.'); return; }
-  sh.getRange(1, 1, 1, 4).setValues([['Email', 'Password', 'Role', 'Driver_ID']]);
-  sh.getRange(1, 1, 1, 4).setFontWeight('bold').setBackground('#f8fafc');
-  sh.setFrozenRows(1);
-  Logger.log('LoginUsers header updated to 4 columns.');
+function seedTripTypes() {
+  var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Settings');
+  var types = ['Owner Errand','Supplier Delivery - Ormoc','Supplier Delivery - Outside Ormoc','Signage Installation','Other'];
+  types.forEach(function(t) { sh.appendRow(['trip_type', t]); });
 }

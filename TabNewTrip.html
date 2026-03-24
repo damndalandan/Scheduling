@@ -88,7 +88,7 @@
       </div>
 
       <!-- Route & Schedule -->
-      <div class="o-divider">Route & Schedule</div>
+      <div class="o-divider">Route &amp; Schedule</div>
       <div class="o-form-grid" style="margin-bottom:18px;">
         <div class="o-form-group">
           <label class="o-label">From Location *</label>
@@ -143,7 +143,7 @@
       </div>
 
       <!-- Vehicle & Driver -->
-      <div class="o-divider">Vehicle & Driver</div>
+      <div class="o-divider">Vehicle &amp; Driver</div>
       <div id="nt-veh-note" class="o-alert o-alert-info" style="margin-bottom:14px;font-size:12px;">
         ℹ️ Vehicle ug Driver pwede i-fill later. Required lang kung i-submit na.
       </div>
@@ -173,8 +173,8 @@
         </div>
 
         <div class="o-form-group">
-          <label class="o-label">Driver Employee ID <span style="color:var(--text3);font-weight:400;">(auto)</span></label>
-          <!-- ✅ This now stores the driver's LOGIN EMAIL for reliable matching -->
+          <label class="o-label">Driver ID <span style="color:var(--text3);font-weight:400;">(auto)</span></label>
+          <!-- Stores Driver_ID (e.g. D-2024-0001) — used for matching on driver dashboard -->
           <input id="nt-driver-empid" class="o-input" placeholder="Auto-filled" readonly
             style="background:var(--surface);cursor:not-allowed;color:var(--text2);">
         </div>
@@ -200,7 +200,7 @@ var nt_empFiltered    = [];
 var nt_joList         = [];
 var nt_joFiltered     = [];
 
-// ✅ Store selected driver's login email here
+// Keeps track of selected driver's email for display only — NOT used for matching
 var nt_selectedDriverEmail = '';
 
 function init_new_trip() {
@@ -289,12 +289,14 @@ function nt_hideReqDropdown() {
 
 // ══════════════════════════════════════
 //  DRIVER DROPDOWN
-//  ✅ KEY FIX: stores loginEmail in driverEmpId field
+//  ✅ KEY FIX: stores driver.driverId (e.g. D-2024-0001) in
+//  nt-driver-empid field — this is what getDriverDashboardData()
+//  matches against in the Trips sheet DRIVER_EMP_ID column.
 // ══════════════════════════════════════
 function nt_filterDriver() {
   var q = (document.getElementById('nt-driver-name').value || '').toLowerCase().trim();
 
-  // Clear selected driver email when user types
+  // Clear stored driver id when user types manually
   nt_selectedDriverEmail = '';
   document.getElementById('nt-driver-empid').value = '';
 
@@ -318,6 +320,7 @@ function nt_renderDriverList() {
     html += '<div class="nt-dropdown-item" data-drv-idx="' + i + '">'
           +   '<div class="item-name">' + o_esc(d.name) + '</div>'
           +   '<div class="item-sub">🪪 ' + o_esc(d.licenseId)
+          +     (d.driverId   ? ' · <span style="color:var(--text3);">ID: ' + o_esc(d.driverId)   + '</span>' : '')
           +     (d.loginEmail ? ' · <span style="color:var(--accent);">✉ ' + o_esc(d.loginEmail) + '</span>' : '')
           +   '</div>'
           + '</div>';
@@ -329,13 +332,17 @@ function nt_renderDriverList() {
       ev.preventDefault();
       var driver = nt_driverFiltered[idx];
 
-      // ✅ Set driver name
+      // Set display name
       document.getElementById('nt-driver-name').value = driver.name;
 
-      // ✅ Store login email as the driverEmpId for reliable matching
-      //    This is the KEY fix — driver dashboard matches by email
+      // ✅ FIXED: Store Driver_ID (e.g. D-2024-0001), NOT the email.
+      //    getDriverDashboardData() reads LoginUsers col4 (Driver_ID)
+      //    and matches against DRIVER_EMP_ID column in Trips sheet.
+      //    Both must be the same value — the Driver_ID.
+      document.getElementById('nt-driver-empid').value = driver.driverId || '';
+
+      // Keep email reference for display only
       nt_selectedDriverEmail = driver.loginEmail || '';
-      document.getElementById('nt-driver-empid').value = driver.loginEmail || driver.empId || '';
 
       nt_hideDriverDropdown();
     });
@@ -357,11 +364,9 @@ function nt_filterJO() {
   var q = (document.getElementById('nt-jo-search').value || '').toLowerCase().trim();
   nt_joFiltered = q
     ? nt_joList.filter(function(j) {
-        return j.joNumber.toLowerCase().includes(q) || j.jobDesc.toLowerCase().includes(q);
+        return j.joNumber.toLowerCase().includes(q) || (j.jobDesc || '').toLowerCase().includes(q);
       })
     : nt_joList.slice();
-  document.getElementById('nt-related-jo').value = '';
-  document.getElementById('nt-jo-selected-badge').style.display = 'none';
   nt_renderJOList();
   nt_showJODropdown();
 }
@@ -369,31 +374,26 @@ function nt_filterJO() {
 function nt_renderJOList() {
   var container = document.getElementById('nt-jo-list');
   if (!nt_joFiltered.length) {
-    container.innerHTML = '<div style="padding:12px 14px;font-size:13px;color:var(--text3);text-align:center;">Walay nakit-an nga JO.</div>';
+    container.innerHTML = '<div style="padding:10px 14px;font-size:13px;color:var(--text3);">Walay nakit-an.</div>';
     return;
   }
   var slice = nt_joFiltered.slice(0, 80);
-  var rows  = '';
-  for (var i = 0; i < slice.length; i++) {
-    rows += '<div class="nt-jo-item" data-idx="' + i + '">'
-          +   '<div style="font-family:DM Mono,monospace;font-size:12px;font-weight:700;color:var(--accent);">' + o_esc(slice[i].joNumber) + '</div>'
-          +   '<div style="font-size:12px;color:var(--text2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + o_esc(slice[i].jobDesc || '—') + '</div>'
-          + '</div>';
-  }
-  container.innerHTML = rows;
-  container.querySelectorAll('.nt-jo-item').forEach(function(el) {
-    var idx = parseInt(el.getAttribute('data-idx'));
-    el.style.cssText = 'padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .12s;';
-    el.addEventListener('mouseenter', function() { this.style.background = 'var(--amber-bg)'; });
-    el.addEventListener('mouseleave', function() { this.style.background = 'transparent'; });
+  container.innerHTML = '';
+  slice.forEach(function(j, i) {
+    var el = document.createElement('div');
+    el.className   = 'nt-dropdown-item';
+    el.setAttribute('data-jo-idx', i);
+    el.innerHTML   = '<div class="item-name">' + o_esc(j.joNumber) + '</div>'
+                   + '<div class="item-sub">' + o_esc(j.jobDesc || '—') + '</div>';
     el.addEventListener('mousedown', function(ev) {
       ev.preventDefault();
-      document.getElementById('nt-related-jo').value      = slice[idx].joNumber;
-      document.getElementById('nt-jo-search').value       = slice[idx].joNumber + (slice[idx].jobDesc ? ' — ' + slice[idx].jobDesc : '');
+      document.getElementById('nt-related-jo').value       = slice[i].joNumber;
+      document.getElementById('nt-jo-search').value        = slice[i].joNumber + (slice[i].jobDesc ? ' — ' + slice[i].jobDesc : '');
       document.getElementById('nt-jo-selected-badge').style.display = 'block';
-      document.getElementById('nt-jo-selected-badge').textContent   = slice[idx].joNumber;
+      document.getElementById('nt-jo-selected-badge').textContent   = slice[i].joNumber;
       nt_hideJODropdown();
     });
+    container.appendChild(el);
   });
   if (nt_joFiltered.length > 80) {
     var more = document.createElement('div');
@@ -517,8 +517,8 @@ function nt_saveTrip(status) {
   draftBtn.disabled = true; submitBtn.disabled = true;
   submitBtn.textContent = status === 'Submitted' ? 'Submitting…' : 'Saving…';
 
-  // ✅ Use the stored login email as driverEmpId
-  //    This is what getDriverDashboardData() matches against
+  // ✅ FIXED: Reads Driver_ID (e.g. D-2024-0001) — set by nt_renderDriverList()
+  //    This is what getDriverDashboardData() matches against in Trips sheet.
   var driverEmpId = document.getElementById('nt-driver-empid').value.trim();
 
   google.script.run
@@ -548,7 +548,7 @@ function nt_saveTrip(status) {
       fromLoc, toLoc, startDate, endDate,
       vehicleId,
       plate       : document.getElementById('nt-plate').value.trim(),
-      driverEmpId : driverEmpId,   // ✅ Now stores login email
+      driverEmpId : driverEmpId,   // ✅ Now correctly sends Driver_ID
       driverName, status
     });
 }
