@@ -1794,3 +1794,13 @@ function ops_resetPassword(targetEmail, newPassword) {
 
   Logger.log('Email not found: ' + email);
 }
+
+function ops_fixLoginUsersHeader() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName('LoginUsers');
+  if (!sh) { Logger.log('LoginUsers not found.'); return; }
+  sh.getRange(1, 1, 1, 4).setValues([['Email', 'Password', 'Role', 'Driver_ID']]);
+  sh.getRange(1, 1, 1, 4).setFontWeight('bold').setBackground('#f8fafc');
+  sh.setFrozenRows(1);
+  Logger.log('LoginUsers header updated to 4 columns.');
+}

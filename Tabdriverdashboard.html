@@ -143,7 +143,7 @@
     <!-- Calendar nav -->
     <div class="drv-cal-header">
       <div class="drv-cal-nav">
-        <<button onclick="drvd_prevPeriod()">&#8249;</button>
+        <button onclick="drvd_prevPeriod()">&#8249;</button>
         <button onclick="drvd_goToday()" style="font-size:11px;">Today</button>
         <button onclick="drvd_nextPeriod()">&#8250;</button>
         <span id="drvd-cal-title" class="drv-cal-title">Loading…</span>
@@ -198,11 +198,12 @@
   <div class="o-modal o-modal-lg">
     <div class="o-modal-header">
       <div class="o-modal-title" id="drvd-detail-title">Trip Details</div>
-<button class="o-modal-close" onclick="document.getElementById('drvd-detail-modal').classList.remove('open')">&#10005;</button>
+      <button class="o-modal-close" onclick="document.getElementById('drvd-detail-modal').classList.remove('open')">&#10005;</button>
+    </div>
     <div class="o-modal-body" id="drvd-detail-body"></div>
     <div class="o-modal-footer">
-     <button class="o-btn o-btn-ghost" onclick="document.getElementById('drvd-detail-modal').classList.remove('open')">Close</button>
-<button id="drvd-complete-btn" class="o-btn o-btn-primary" style="display:none;" onclick="drvd_openComplete()">&#128681; Mark as Completed</button>
+      <button class="o-btn o-btn-ghost" onclick="document.getElementById('drvd-detail-modal').classList.remove('open')">Close</button>
+      <button id="drvd-complete-btn" class="o-btn o-btn-primary" style="display:none;" onclick="drvd_openComplete()">&#128681; Mark as Completed</button>
     </div>
   </div>
 </div>

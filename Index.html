@@ -437,72 +437,52 @@ function o_applyRoleUI(role) {
 function o_logout() {
   if (!confirm('Sign out ka ba?')) return;
 
-  // ── 1. Clear session storage ──
+  // 1. Clear session storage
   sessionStorage.removeItem('ops_email');
   sessionStorage.removeItem('ops_role');
 
-  // ── 2. Reset all tab panes — remove active, clear inner content ──
+  // 2. Reset all tab panes — remove active, clear inner content
   document.querySelectorAll('.tab-pane').forEach(function(pane) {
     pane.classList.remove('active');
-
-    // Clear rendered content inside each tab so stale data
-    // from the previous user is never briefly visible on next login
-    // Skip the login tab and the static shell elements
-    var skipIds = ['tab-dashboard','tab-vehicles','tab-drivers',
-                   'tab-renewals','tab-trips','tab-new-trip',
-                   'tab-approval','tab-completion','tab-reports',
-                   'tab-trip-types','tab-driver-dashboard'];
-    if (skipIds.indexOf(pane.id) !== -1) {
-      // Only clear the dynamic content containers, not the whole pane
-      // (preserves the static HTML structure like headers and forms)
-      var dynamicSelectors = [
-        'tbody',           // all table bodies
-        '[id$="-cards"]',  // mobile card containers
-        '[id$="-stats"]',  // stat card rows
-        '[id$="-recent"]', // recent trip lists
-        '[id$="-alerts"]', // alert lists
-        '[id$="-pagination"]', // pagination controls
-        '[id$="-calendar-body"]' // driver calendar
-      ];
-      dynamicSelectors.forEach(function(sel) {
-        pane.querySelectorAll(sel).forEach(function(el) {
-          el.innerHTML = '';
-        });
-      });
-    }
+    var dynamicSelectors = [
+      'tbody', '[id$="-cards"]', '[id$="-stats"]',
+      '[id$="-recent"]', '[id$="-alerts"]',
+      '[id$="-pagination"]', '[id$="-calendar-body"]'
+    ];
+    dynamicSelectors.forEach(function(sel) {
+      pane.querySelectorAll(sel).forEach(function(el) { el.innerHTML = ''; });
+    });
   });
 
-  // ── 3. Reset initialized tabs tracker ──
+  // 3. Reset initialized tabs tracker
   initializedTabs = {};
 
-  // ── 4. Reset sidebar nav — clear active states ──
+  // 4. Reset sidebar nav — clear active states
   document.querySelectorAll('.o-nav-item').forEach(function(item) {
     item.classList.remove('active');
   });
 
-  // ── 5. Restore full sidebar visibility (undo driver-mode hiding) ──
+  // 5. Restore full sidebar visibility
   document.querySelectorAll('#o-sidebar .o-nav-item, #o-sidebar .o-nav-section, #o-sidebar .o-nav-divider')
     .forEach(function(el) { el.style.display = ''; });
-
-  // Re-hide the driver-only nav item
   var driverNav = document.querySelector('.o-nav-item[data-tab="driver-dashboard"]');
   if (driverNav) driverNav.style.display = 'none';
 
-  // ── 6. Reset navbar user info ──
+  // 6. Reset navbar user info
   document.getElementById('o-user-email').textContent  = '';
   document.getElementById('o-user-avatar').textContent = 'U';
   document.getElementById('o-role-badge').textContent  = 'Loading\u2026';
 
-  // ── 7. Reset any open modals ──
+  // 7. Close any open modals
   document.querySelectorAll('.o-modal-overlay.open').forEach(function(modal) {
     modal.classList.remove('open');
   });
 
-  // ── 8. Close mobile sidebar if open ──
+  // 8. Close mobile sidebar if open
   document.getElementById('o-sidebar').classList.remove('mobile-open');
   document.getElementById('o-overlay').style.display = 'none';
 
-  // ── 9. Reset login form ──
+  // 9. Reset login form
   var emailEl = document.getElementById('lg-email');
   var pwEl    = document.getElementById('lg-password');
   if (emailEl) { emailEl.value = ''; emailEl.classList.remove('error'); }
@@ -510,14 +490,12 @@ function o_logout() {
   var alertEl = document.getElementById('lg-alert');
   if (alertEl) alertEl.classList.remove('show');
 
-  // ── 10. Show login screen with fade-in ──
+  // 10. Show login screen with fade-in
   var screen = document.getElementById('login-screen');
   screen.style.opacity    = '0';
   screen.style.display    = 'flex';
   screen.style.transition = 'opacity .35s ease';
   setTimeout(function() { screen.style.opacity = '1'; }, 20);
-
-  // Focus email field after fade
   setTimeout(function() {
     var emailEl = document.getElementById('lg-email');
     if (emailEl) emailEl.focus();
