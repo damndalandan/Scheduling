@@ -290,8 +290,8 @@ function lg_submit() {
       lg_setLoading(false);
       if (r.success) {
         // Save session
-        sessionStorage.setItem('ops_email', r.email || '');
-        sessionStorage.setItem('ops_role',  r.role  || 'No Role');
+        localStorage.setItem('ops_email', r.email || '');
+        localStorage.setItem('ops_role',  r.role  || 'No Role');
 
         // Ensure all tab panes are inactive before applying role UI
         // Prevents any previous active pane from flashing during transition

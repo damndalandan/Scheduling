@@ -438,8 +438,8 @@ function o_logout() {
   if (!confirm('Sign out ka ba?')) return;
 
   // 1. Clear session storage
-  sessionStorage.removeItem('ops_email');
-  sessionStorage.removeItem('ops_role');
+  localStorage.removeItem('ops_email');
+  localStorage.removeItem('ops_role');
 
   // 2. Reset all tab panes — remove active, clear inner content
   document.querySelectorAll('.tab-pane').forEach(function(pane) {
@@ -506,8 +506,8 @@ function o_logout() {
 
 // AUTO-RESTORE SESSION ON REFRESH — verified against server
 (function() {
-  var savedEmail = sessionStorage.getItem('ops_email');
-  var savedRole  = sessionStorage.getItem('ops_role');
+  var savedEmail = localStorage.getItem('ops_email');
+  var savedRole  = localStorage.getItem('ops_role');
 
   if (!savedEmail || !savedRole) return;
 
@@ -520,8 +520,8 @@ function o_logout() {
     .withSuccessHandler(function(r) {
       if (r.success) {
         // Server confirmed — restore session
-        sessionStorage.setItem('ops_email', r.email);
-        sessionStorage.setItem('ops_role',  r.role);
+        localStorage.setItem('ops_email', r.email);
+        localStorage.setItem('ops_role',  r.role);
 
         if (screen) screen.style.display = 'none';
         document.getElementById('o-user-email').textContent  = r.email;
@@ -530,8 +530,8 @@ function o_logout() {
         o_applyRoleUI(r.role);
       } else {
         // Server rejected — clear storage and show login
-        sessionStorage.removeItem('ops_email');
-        sessionStorage.removeItem('ops_role');
+        localStorage.removeItem('ops_email');
+        localStorage.removeItem('ops_role');
         if (badge) badge.textContent = 'Loading\u2026';
         if (screen) {
           screen.style.opacity    = '1';
