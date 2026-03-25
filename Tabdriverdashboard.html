@@ -219,8 +219,8 @@
       <div id="drvd-cmp-summary" style="padding:10px 12px;background:var(--surface2);border-radius:8px;font-size:13px;margin-bottom:16px;"></div>
 
       <div class="o-divider" style="margin-top:0;">Actual Date &amp; Time</div>
-      <div class="o-form-grid" style="margin-bottom:14px;">
-        <div class="o-form-group">
+      <div style="margin-bottom:14px;">
+        <div class="o-form-group" style="margin-bottom:10px;">
           <label class="o-label">Actual Start *</label>
           <div style="display:flex;gap:6px;">
             <input type="date" id="drvd-actual-start-date" class="o-input" style="flex:1.4;">
@@ -259,11 +259,6 @@
         </div>
       </div>
 
-      <div class="o-divider">Remarks</div>
-      <div class="o-form-group">
-        <label class="o-label">Remarks <span style="color:var(--text3);font-weight:400;">(optional)</span></label>
-        <textarea id="drvd-remarks" class="o-input" placeholder="Any notes about this trip…" style="min-height:60px;"></textarea>
-      </div>
     </div>
     <div class="o-modal-footer">
       <button class="o-btn o-btn-ghost" onclick="document.getElementById('drvd-complete-modal').classList.remove('open')">Cancel</button>
@@ -648,7 +643,7 @@ function drvd_showCompleteModal(tripId) {
 
   ['drvd-actual-start-date','drvd-actual-start-hr','drvd-actual-start-min',
    'drvd-actual-end-date','drvd-actual-end-hr','drvd-actual-end-min',
-   'drvd-start-km','drvd-end-km','drvd-remarks'].forEach(function(id) {
+   'drvd-start-km','drvd-end-km'].forEach(function(id) {
     document.getElementById(id).value = '';
   });
   document.getElementById('drvd-actual-start-ampm').value = 'AM';
@@ -691,7 +686,6 @@ function drvd_submitComplete() {
   var actualEnd   = drvd_build24('drvd-actual-end-date','drvd-actual-end-hr','drvd-actual-end-min','drvd-actual-end-ampm');
   var startKm     = document.getElementById('drvd-start-km').value;
   var endKm       = document.getElementById('drvd-end-km').value;
-  var remarks     = document.getElementById('drvd-remarks').value;
 
   if (!actualStart) { o_toast('error', 'Actual Start required.'); return; }
   if (!actualEnd)   { o_toast('error', 'Actual End required.');   return; }
@@ -723,7 +717,6 @@ function drvd_submitComplete() {
       actualEnd   : actualEnd,
       startKm     : startKm,
       endKm       : endKm,
-      remarks     : remarks,
       sessionEmail: sessionStorage.getItem('ops_email') || ''
     });
 
