@@ -505,15 +505,22 @@ function o_logout() {
 // Boot is handled by TabLogin.html — lg_submit() calls switchTab + init_dashboard after login.
 
 // AUTO-RESTORE SESSION ON REFRESH — verified against server
+// AUTO-RESTORE SESSION ON REFRESH — verified against server
 (function() {
   var savedEmail = localStorage.getItem('ops_email');
   var savedRole  = localStorage.getItem('ops_role');
 
-  if (!savedEmail || !savedRole) return;
-
-  // Show a subtle loading state while we verify
   var screen = document.getElementById('login-screen');
   var badge  = document.getElementById('o-role-badge');
+
+  if (!savedEmail || !savedRole) {
+    // No saved session — show login immediately
+    if (screen) { screen.style.opacity = '1'; screen.style.display = 'flex'; }
+    return;
+  }
+
+  // Has saved session — keep login hidden, verify with server silently
+  if (screen) screen.style.display = 'none';
   if (badge) badge.textContent = 'Verifying\u2026';
 
   google.script.run
@@ -533,21 +540,15 @@ function o_logout() {
         localStorage.removeItem('ops_email');
         localStorage.removeItem('ops_role');
         if (badge) badge.textContent = 'Loading\u2026';
-        if (screen) {
-          screen.style.opacity    = '1';
-          screen.style.display    = 'flex';
-        }
+        if (screen) { screen.style.opacity = '1'; screen.style.display = 'flex'; }
       }
     })
     .withFailureHandler(function() {
       // Network error — clear storage and show login
-      sessionStorage.removeItem('ops_email');
-      sessionStorage.removeItem('ops_role');
+      localStorage.removeItem('ops_email');
+      localStorage.removeItem('ops_role');
       if (badge) badge.textContent = 'Loading\u2026';
-      if (screen) {
-        screen.style.opacity = '1';
-        screen.style.display = 'flex';
-      }
+      if (screen) { screen.style.opacity = '1'; screen.style.display = 'flex'; }
     })
     .ops_verifySession(savedEmail);
 })();
