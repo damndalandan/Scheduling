@@ -110,6 +110,8 @@
   .drv-day-cell { min-height: 50px; }
   .drv-trip-chip { display: none; }
   .drv-day-cell.has-trip { border-color: var(--accent); }
+  .drv-view-tabs { display: none; }
+  #drvd-view-select { display: block !important; }
 }
 </style>
 
@@ -149,10 +151,15 @@
         <span id="drvd-cal-title" class="drv-cal-title">Loading…</span>
       </div>
       <div class="drv-view-tabs">
-       <button class="drv-view-tab active" onclick="drvd_setView('month',this)">Month</button>
-       <button class="drv-view-tab" onclick="drvd_setView('week',this)">Week</button>
-       <button class="drv-view-tab" onclick="drvd_setView('day',this)">Day</button>
+        <button class="drv-view-tab active" onclick="drvd_setView('month',this)">Month</button>
+        <button class="drv-view-tab" onclick="drvd_setView('week',this)">Week</button>
+        <button class="drv-view-tab" onclick="drvd_setView('day',this)">Day</button>
       </div>
+      <select id="drvd-view-select" class="o-input" style="display:none;font-size:13px;padding:6px 10px;width:auto;" onchange="drvd_setViewFromSelect(this.value)">
+        <option value="month">Month</option>
+        <option value="week">Week</option>
+        <option value="day">Day</option>
+      </select>
     </div>
 
     <!-- Calendar body -->
@@ -357,6 +364,26 @@ function drvd_setView(v, btn) {
   drvd_view = v;
   document.querySelectorAll('.drv-view-tab').forEach(function(b) { b.classList.remove('active'); });
   btn.classList.add('active');
+  document.getElementById('drvd-view-select').value = v;
+  drvd_renderCalendar();
+}
+
+function drvd_setViewFromSelect(v) {
+  drvd_view = v;
+  document.querySelectorAll('.drv-view-tab').forEach(function(b) {
+    b.classList.toggle('active', b.textContent.toLowerCase() === v);
+  });
+  drvd_renderCalendar();
+}
+
+function drvd_jumpToDay(dateStr) {
+  var parts = dateStr.split('-');
+  drvd_curDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+  drvd_view = 'day';
+  document.querySelectorAll('.drv-view-tab').forEach(function(b) {
+    b.classList.toggle('active', b.textContent.toLowerCase() === 'day');
+  });
+  document.getElementById('drvd-view-select').value = 'day';
   drvd_renderCalendar();
 }
 
@@ -448,7 +475,7 @@ function drvd_renderMonth() {
     var ds      = drvd_dateStr(y, m, d2);
     var isToday = ds === todayStr;
     var trips   = drvd_tripsOnDate(ds);
-    html += '<div class="drv-day-cell' + (isToday ? ' today' : '') + (trips.length ? ' has-trip' : '') + '">';
+    html += '<div class="drv-day-cell' + (isToday ? ' today' : '') + (trips.length ? ' has-trip' : '') + '" onclick="drvd_jumpToDay(\'' + ds + '\')" style="cursor:pointer;">';
     html += '<div class="drv-day-num">' + d2 + '</div>';
     trips.slice(0, 2).forEach(function(t) {
       html += '<span class="drv-trip-chip ' + drvd_chipClass(t.status) + '" onclick="drvd_openDetail(\'' + o_esc(t.tripId) + '\')" title="' + o_esc(t.fromLoc + ' → ' + t.toLoc) + '">'
