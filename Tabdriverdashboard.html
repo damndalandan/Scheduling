@@ -224,8 +224,8 @@
           <label class="o-label">Actual Start *</label>
           <div style="display:flex;gap:6px;">
             <input type="date" id="drvd-actual-start-date" class="o-input" style="flex:1.4;">
-            <input type="number" id="drvd-actual-start-hr" class="o-input" placeholder="hh" min="1" max="12" style="flex:0.6;text-align:center;">
-            <input type="number" id="drvd-actual-start-min" class="o-input" placeholder="mm" min="0" max="59" style="flex:0.6;text-align:center;">
+           <input list="hrs-list" id="drvd-actual-start-hr" class="o-input" placeholder="hh" style="flex:0.6;text-align:center;">
+           <input list="mins-list" id="drvd-actual-start-min" class="o-input" placeholder="mm" style="flex:0.6;text-align:center;">
             <select id="drvd-actual-start-ampm" class="o-input" style="flex:0.8;">
               <option>AM</option><option>PM</option>
             </select>
@@ -235,8 +235,8 @@
           <label class="o-label">Actual End *</label>
           <div style="display:flex;gap:6px;">
             <input type="date" id="drvd-actual-end-date" class="o-input" style="flex:1.4;">
-            <input type="number" id="drvd-actual-end-hr" class="o-input" placeholder="hh" min="1" max="12" style="flex:0.6;text-align:center;">
-            <input type="number" id="drvd-actual-end-min" class="o-input" placeholder="mm" min="0" max="59" style="flex:0.6;text-align:center;">
+            <input list="hrs-list" id="drvd-actual-end-hr" class="o-input" placeholder="hh" style="flex:0.6;text-align:center;">
+            <input list="mins-list" id="drvd-actual-end-min" class="o-input" placeholder="mm" style="flex:0.6;text-align:center;">
             <select id="drvd-actual-end-ampm" class="o-input" style="flex:0.8;">
               <option>AM</option><option>PM</option>
             </select>
@@ -260,6 +260,16 @@
       </div>
 
     </div>
+    <datalist id="hrs-list">
+      <option value="1"><option value="2"><option value="3"><option value="4">
+      <option value="5"><option value="6"><option value="7"><option value="8">
+      <option value="9"><option value="10"><option value="11"><option value="12">
+    </datalist>
+    <datalist id="mins-list">
+      <option value="00"><option value="05"><option value="10"><option value="15">
+      <option value="20"><option value="25"><option value="30"><option value="35">
+      <option value="40"><option value="45"><option value="50"><option value="55">
+    </datalist>
     <div class="o-modal-footer">
       <button class="o-btn o-btn-ghost" onclick="document.getElementById('drvd-complete-modal').classList.remove('open')">Cancel</button>
 <button id="drvd-cmp-save-btn" class="o-btn o-btn-primary" onclick="drvd_submitComplete()">&#10003; Confirm Complete</button>
