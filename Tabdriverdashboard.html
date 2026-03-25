@@ -111,7 +111,6 @@
   .drv-trip-chip { display: none; }
   .drv-day-cell.has-trip { border-color: var(--accent); }
   .drv-view-tabs { display: none; }
-  #drvd-view-select { display: block !important; }
 }
 </style>
 
@@ -146,7 +145,14 @@
     <div class="drv-cal-header">
       <div class="drv-cal-nav">
         <button onclick="drvd_prevPeriod()">&#8249;</button>
-        <button onclick="drvd_goToday()" style="font-size:11px;">Today</button>
+        <div style="position:relative;display:inline-block;">
+          <button onclick="drvd_goToday()" style="font-size:11px;">Today</button>
+          <select id="drvd-view-select" class="o-input" style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;" onchange="drvd_setViewFromSelect(this.value)">
+            <option value="month">Month</option>
+            <option value="week">Week</option>
+            <option value="day">Day</option>
+          </select>
+        </div>
         <button onclick="drvd_nextPeriod()">&#8250;</button>
         <span id="drvd-cal-title" class="drv-cal-title">Loading…</span>
       </div>
@@ -155,11 +161,6 @@
         <button class="drv-view-tab" onclick="drvd_setView('week',this)">Week</button>
         <button class="drv-view-tab" onclick="drvd_setView('day',this)">Day</button>
       </div>
-      <select id="drvd-view-select" class="o-input" style="display:none;font-size:13px;padding:6px 10px;width:auto;" onchange="drvd_setViewFromSelect(this.value)">
-        <option value="month">Month</option>
-        <option value="week">Week</option>
-        <option value="day">Day</option>
-      </select>
     </div>
 
     <!-- Calendar body -->
