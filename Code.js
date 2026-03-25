@@ -1455,24 +1455,14 @@ function ops_addDriver(payload) {
       payload.notes         || ''
     ]]);
 
-    // 2. Then save to LoginUsers with the confirmed Driver_ID
-    var nextLoginRow = loginSh.getLastRow() + 1;
-    loginSh.getRange(nextLoginRow, 1, 1, 4).setValues([[
+    loginSh.getRange(loginSh.getLastRow() + 1, 1, 1, 4).setValues([[
       payload.email.trim().toLowerCase(),
       ops_hashPassword_(payload.password),
       'driver',
       id
     ]]);
-    SpreadsheetApp.flush(); // ✅ Flush after both sheets
 
-    // 3. Verify the Driver_ID was saved correctly
-    var verifyRow = loginSh.getRange(nextLoginRow, 4).getValue();
-    if (!verifyRow || String(verifyRow).trim() !== id) {
-      loginSh.getRange(nextLoginRow, 4).setValue(id);
-      SpreadsheetApp.flush();
-      Logger.log('⚠️ Driver_ID verification fix applied for: ' + id);
-    }
-
+    SpreadsheetApp.flush();
     ops_audit_('OPS_ADD_DRIVER', { driverId: id, name: payload.name, email: payload.email, by: user.email });
     return {
       success  : true,
