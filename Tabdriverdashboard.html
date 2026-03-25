@@ -222,11 +222,25 @@
       <div class="o-form-grid" style="margin-bottom:14px;">
         <div class="o-form-group">
           <label class="o-label">Actual Start *</label>
-          <input type="datetime-local" id="drvd-actual-start" class="o-input">
+          <div style="display:flex;gap:6px;">
+            <input type="date" id="drvd-actual-start-date" class="o-input" style="flex:1.4;">
+            <input type="number" id="drvd-actual-start-hr" class="o-input" placeholder="hh" min="1" max="12" style="flex:0.6;text-align:center;">
+            <input type="number" id="drvd-actual-start-min" class="o-input" placeholder="mm" min="0" max="59" style="flex:0.6;text-align:center;">
+            <select id="drvd-actual-start-ampm" class="o-input" style="flex:0.8;">
+              <option>AM</option><option>PM</option>
+            </select>
+          </div>
         </div>
         <div class="o-form-group">
           <label class="o-label">Actual End *</label>
-          <input type="datetime-local" id="drvd-actual-end" class="o-input">
+          <div style="display:flex;gap:6px;">
+            <input type="date" id="drvd-actual-end-date" class="o-input" style="flex:1.4;">
+            <input type="number" id="drvd-actual-end-hr" class="o-input" placeholder="hh" min="1" max="12" style="flex:0.6;text-align:center;">
+            <input type="number" id="drvd-actual-end-min" class="o-input" placeholder="mm" min="0" max="59" style="flex:0.6;text-align:center;">
+            <select id="drvd-actual-end-ampm" class="o-input" style="flex:0.8;">
+              <option>AM</option><option>PM</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -632,9 +646,13 @@ function drvd_showCompleteModal(tripId) {
       + '<br><span style="color:var(--text3);font-size:12px;">Planned: ' + o_esc(t.startDate || '—') + ' &mdash; ' + o_esc(t.endDate || '—') + '</span>'
     : tripId;
 
-  ['drvd-actual-start','drvd-actual-end','drvd-start-km','drvd-end-km','drvd-remarks'].forEach(function(id) {
+  ['drvd-actual-start-date','drvd-actual-start-hr','drvd-actual-start-min',
+   'drvd-actual-end-date','drvd-actual-end-hr','drvd-actual-end-min',
+   'drvd-start-km','drvd-end-km','drvd-remarks'].forEach(function(id) {
     document.getElementById(id).value = '';
   });
+  document.getElementById('drvd-actual-start-ampm').value = 'AM';
+  document.getElementById('drvd-actual-end-ampm').value = 'AM';
   document.getElementById('drvd-dist-display').style.display = 'none';
   document.getElementById('drvd-complete-modal').classList.add('open');
 }
@@ -659,8 +677,18 @@ function drvd_calcDist() {
 }
 
 function drvd_submitComplete() {
-  var actualStart = document.getElementById('drvd-actual-start').value;
-  var actualEnd   = document.getElementById('drvd-actual-end').value;
+  function drvd_build24(dateId, hrId, minId, ampmId) {
+    var d = document.getElementById(dateId).value;
+    var h = parseInt(document.getElementById(hrId).value) || 0;
+    var m = parseInt(document.getElementById(minId).value) || 0;
+    var ap = document.getElementById(ampmId).value;
+    if (!d || !h) return '';
+    if (ap === 'AM' && h === 12) h = 0;
+    if (ap === 'PM' && h !== 12) h += 12;
+    return d + 'T' + String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+  }
+  var actualStart = drvd_build24('drvd-actual-start-date','drvd-actual-start-hr','drvd-actual-start-min','drvd-actual-start-ampm');
+  var actualEnd   = drvd_build24('drvd-actual-end-date','drvd-actual-end-hr','drvd-actual-end-min','drvd-actual-end-ampm');
   var startKm     = document.getElementById('drvd-start-km').value;
   var endKm       = document.getElementById('drvd-end-km').value;
   var remarks     = document.getElementById('drvd-remarks').value;
